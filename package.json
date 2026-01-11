@@ -53,5 +53,9 @@
 		"vite": "^7.2.6",
 		"vitest": "^4.0.15",
 		"vitest-browser-svelte": "^2.0.1"
+	},
+	"dependencies": {
+		"y-webrtc": "^10.3.0",
+		"yjs": "^13.6.29"
 	}
 }
