@@ -46,11 +46,7 @@
 
 		// 2. Initialize WebrtcProvider with roomId
 		const webrtcProvider = new WebrtcProvider(roomId, doc, {
-			signaling: [
-				'wss://signaling.yjs.dev',
-				'wss://y-webrtc-signaling-eu.herokuapp.com',
-				'wss://y-webrtc-signaling-us.herokuapp.com'
-			],
+			signaling: ['wss://signaling.yjs.dev'],
 			maxConns: 20,
 			filterBcConns: false // Allow BroadcastChannel for same-browser tabs
 		});
@@ -66,21 +62,12 @@
 			console.log('[Yjs] Connection status:', event.connected);
 		});
 
-		webrtcProvider.on('peers', (event: { webrtcPeers: any[]; bcConns?: Set<any> }) => {
-			const webrtcCount = event.webrtcPeers.length;
-			const bcCount = event.bcConns ? event.bcConns.size : 0;
-			peerCount = webrtcCount + bcCount;
-			console.log('[Yjs] Peers connected:', peerCount, '(WebRTC:', webrtcCount, 'BroadcastChannel:', bcCount + ')');
-		});
-
 		// 4. Update state
 		ydoc = doc;
 		provider = webrtcProvider;
 		connectionStatus = 'connecting';
 
 		console.log('[Yjs] Initialized for room:', roomId);
-		console.log('[Yjs] Doc GUID:', doc.guid);
-		console.log('[Yjs] BroadcastChannel supported:', typeof BroadcastChannel !== 'undefined');
 
 		// Track awareness changes (user presence)
 		const awareness = webrtcProvider.awareness;
@@ -97,16 +84,6 @@
 
 		// Initial count
 		updatePeerCount();
-
-		// Debug: Check provider internals
-		setTimeout(() => {
-			console.log('[Yjs] Debug Info:');
-			console.log('  - Room:', webrtcProvider.roomName);
-			console.log('  - Connected:', webrtcProvider.connected);
-			console.log('  - BroadcastChannel:', webrtcProvider.bcconnected);
-			console.log('  - WebRTC Peers:', (webrtcProvider as any).webrtcConns?.size || 0);
-			console.log('  - BC Connections:', (webrtcProvider as any).bcConns?.size || 0);
-		}, 1000);
 
 		// 5. Cleanup function
 		return () => {
