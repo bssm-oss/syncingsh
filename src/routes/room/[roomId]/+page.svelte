@@ -44,8 +44,12 @@
 		const doc = new Y.Doc();
 
 		// 2. Initialize WebrtcProvider with roomId
+		const signalingUrl = import.meta.env.DEV
+			? 'ws://localhost:4444'
+			: 'wss://signaling.yjs.dev';
+
 		const webrtcProvider = new WebrtcProvider(roomId, doc, {
-			signaling: ['wss://signaling.yjs.dev'],
+			signaling: [signalingUrl],
 			maxConns: 20,
 			filterBcConns: false // Allow BroadcastChannel for same-browser tabs
 		});
