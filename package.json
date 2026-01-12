@@ -5,7 +5,6 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"signaling": "node node_modules/y-webrtc/bin/server.js",
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
@@ -41,7 +40,6 @@
 		"eslint-plugin-storybook": "^10.1.11",
 		"eslint-plugin-svelte": "^3.13.1",
 		"globals": "^16.5.0",
-		"lib0": "^0.2.117",
 		"playwright": "^1.57.0",
 		"prettier": "^3.7.4",
 		"prettier-plugin-svelte": "^3.4.0",
@@ -54,11 +52,6 @@
 		"typescript-eslint": "^8.48.1",
 		"vite": "^7.2.6",
 		"vitest": "^4.0.15",
-		"vitest-browser-svelte": "^2.0.1",
-		"ws": "^8.19.0"
-	},
-	"dependencies": {
-		"y-webrtc": "^10.3.0",
-		"yjs": "^13.6.29"
+		"vitest-browser-svelte": "^2.0.1"
 	}
 }
