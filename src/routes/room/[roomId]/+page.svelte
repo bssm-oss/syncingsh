@@ -3,47 +3,50 @@
 	import { page } from '$app/stores';
 	import * as Y from 'yjs';
 	import { WebrtcProvider } from 'y-webrtc';
+	import Editor from '$lib/components/Editor.svelte';
+	import Presence from '$lib/components/Presence.svelte';
+	import { getNickname, setNickname, getUserColor } from '$lib/utils/nickname';
 	import type { ConnectionStatus } from '$lib/types/yjs';
+	import type { Awareness } from 'y-protocols/awareness';
 
 	const roomId = $derived($page.params.roomId);
 
 	let ydoc = $state<Y.Doc | null>(null);
+	let awareness = $state<Awareness | null>(null);
 	let connectionStatus = $state<ConnectionStatus>('disconnected');
-	let peerCount = $state<number>(0);
-	let errorMessage = $state<string | null>(null);
+	let nickname = $state('');
+	let editingName = $state(false);
 
-	const connectionColor = $derived(
+	const statusColor = $derived(
 		connectionStatus === 'connected'
-			? 'green'
+			? '#22c55e'
 			: connectionStatus === 'connecting'
-				? 'yellow'
+				? '#eab308'
 				: connectionStatus === 'error'
-					? 'red'
-					: 'gray'
+					? '#ef4444'
+					: '#9ca3af'
 	);
 
-	const connectionText = $derived(
-		connectionStatus === 'connected'
-			? `Connected (${peerCount} peers)`
-			: connectionStatus === 'connecting'
-				? 'Connecting...'
-				: connectionStatus === 'error'
-					? 'Connection Failed'
-					: 'Disconnected'
-	);
+	function updateNickname() {
+		const trimmed = nickname.trim();
+		if (!trimmed) return;
+		setNickname(trimmed);
+		if (awareness) {
+			awareness.setLocalStateField('user', {
+				name: trimmed,
+				color: getUserColor()
+			});
+		}
+		editingName = false;
+	}
 
 	onMount(() => {
-		// Guard against undefined roomId
-		if (!roomId) {
-			errorMessage = 'Room ID is missing';
-			connectionStatus = 'error';
-			return;
-		}
+		if (!roomId) return;
 
-		// 1. Create Y.Doc instance
+		nickname = getNickname();
+		const userColor = getUserColor();
 		const doc = new Y.Doc();
 
-		// 2. Initialize WebrtcProvider with roomId
 		const signalingUrl = import.meta.env.DEV
 			? 'ws://localhost:4444'
 			: 'wss://signaling.yjs.dev';
@@ -51,46 +54,28 @@
 		const webrtcProvider = new WebrtcProvider(roomId, doc, {
 			signaling: [signalingUrl],
 			maxConns: 20,
-			filterBcConns: false // Allow BroadcastChannel for same-browser tabs
+			filterBcConns: false
 		});
 
-		// 3. Set up event listeners
 		webrtcProvider.on('synced', () => {
 			connectionStatus = 'connected';
-			console.log('[Yjs] Synced with peers');
 		});
 
 		webrtcProvider.on('status', (event: { connected: boolean }) => {
 			connectionStatus = event.connected ? 'connected' : 'connecting';
-			console.log('[Yjs] Connection status:', event.connected);
 		});
 
-		// 4. Update state
+		// Set local user info for presence
+		webrtcProvider.awareness.setLocalStateField('user', {
+			name: nickname,
+			color: userColor
+		});
+
 		ydoc = doc;
+		awareness = webrtcProvider.awareness;
 		connectionStatus = 'connecting';
 
-		console.log('[Yjs] Initialized for room:', roomId);
-
-		// Track awareness changes (user presence)
-		const awareness = webrtcProvider.awareness;
-
-		const updatePeerCount = () => {
-			const states = awareness.getStates();
-			const clientCount = states.size;
-			const stateArray = Array.from(states.keys());
-			peerCount = Math.max(0, clientCount - 1); // Exclude self
-			console.log('[Yjs] Awareness changed - Total clients:', clientCount, 'Peers:', peerCount, 'Client IDs:', stateArray);
-		};
-
-		awareness.on('change', updatePeerCount);
-
-		// Initial count
-		updatePeerCount();
-
-		// 5. Cleanup function
 		return () => {
-			console.log('[Yjs] Cleaning up...');
-			awareness.off('change', updatePeerCount);
 			webrtcProvider.disconnect();
 			webrtcProvider.destroy();
 			doc.destroy();
@@ -98,103 +83,52 @@
 	});
 </script>
 
-<div class="room-container">
-	<!-- Status Bar -->
-	<div class="status-bar">
-		<div class="status-content">
-			<span class="status-indicator" style="background-color: {connectionColor};"></span>
-			<span class="status-text">{connectionText}</span>
+<div class="mx-auto max-w-4xl px-4 py-6">
+	<header class="mb-6 flex items-center justify-between">
+		<div>
+			<h1 class="text-lg font-semibold text-gray-900">Room: {roomId}</h1>
+			<div class="mt-1 flex items-center gap-2">
+				{#if editingName}
+					<form
+						onsubmit={(e) => {
+							e.preventDefault();
+							updateNickname();
+						}}
+						class="flex items-center gap-1"
+					>
+						<input
+							type="text"
+							bind:value={nickname}
+							class="w-32 rounded border border-gray-300 px-2 py-0.5 text-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+						/>
+						<button type="submit" class="text-sm text-gray-500 hover:text-gray-900">저장</button>
+					</form>
+				{:else}
+					<button
+						onclick={() => (editingName = true)}
+						class="text-sm text-gray-500 hover:text-gray-900"
+						title="닉네임 변경"
+					>
+						{nickname}
+					</button>
+				{/if}
+				<span
+					class="inline-block h-2.5 w-2.5 rounded-full"
+					style="background-color: {statusColor}"
+					title={connectionStatus}
+				></span>
+			</div>
 		</div>
-		{#if errorMessage}
-			<div class="error-message">{errorMessage}</div>
-		{/if}
-	</div>
-
-	<!-- Room Header -->
-	<div class="room-header">
-		<h1 class="room-title">Room: {roomId}</h1>
-		<p class="room-subtitle">Share this URL to invite collaborators</p>
-		{#if connectionStatus === 'connected' && peerCount > 0}
-			<p class="peer-info">
-				{peerCount} peer{peerCount !== 1 ? 's' : ''} connected
-			</p>
-		{/if}
-	</div>
-
-	<!-- Debug Panel (Development Only) -->
-	{#if import.meta.env.DEV}
-		<div class="debug-panel">
-			<h3 class="debug-title">Debug Info</h3>
-			<pre class="debug-content">Status: {connectionStatus}
-Peers: {peerCount}
-Room ID: {roomId}
-Doc GUID: {ydoc?.guid || 'Not initialized'}</pre>
+		<div class="flex items-center gap-3">
+			{#if awareness}
+				<Presence {awareness} />
+			{/if}
 		</div>
+	</header>
+
+	{#if ydoc}
+		<Editor {ydoc} />
+	{:else}
+		<div class="flex h-64 items-center justify-center text-gray-400">연결 중...</div>
 	{/if}
 </div>
-
-<style>
-	.status-bar {
-		padding: 1rem;
-		background: #f5f5f5;
-		border-radius: 8px;
-		margin-bottom: 1rem;
-	}
-
-	.status-content {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.status-indicator {
-		width: 10px;
-		height: 10px;
-		border-radius: 50%;
-	}
-
-	.status-text {
-		font-weight: 500;
-	}
-
-	.error-message {
-		color: red;
-		margin-top: 0.5rem;
-	}
-
-	.room-header {
-		margin-bottom: 2rem;
-	}
-
-	.room-title {
-		font-size: 2rem;
-		font-weight: bold;
-		margin-bottom: 0.5rem;
-	}
-
-	.room-subtitle {
-		color: #666;
-	}
-
-	.peer-info {
-		color: green;
-		margin-top: 0.5rem;
-	}
-
-	.debug-panel {
-		padding: 1rem;
-		background: #f0f0f0;
-		border-radius: 8px;
-		font-family: monospace;
-		font-size: 0.875rem;
-	}
-
-	.debug-title {
-		font-weight: bold;
-		margin-bottom: 0.5rem;
-	}
-
-	.debug-content {
-		margin: 0;
-	}
-</style>

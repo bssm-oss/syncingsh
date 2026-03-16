@@ -6,17 +6,16 @@
 ## 핵심 컨셉
 
 - **Ephemeral** — 서버에 대화/문서 기록을 저장하지 않음
-- **실시간 동기화** — Yjs CRDT + Supabase Realtime으로 실시간 동시 편집
-- **로그인 Optional** — 게스트도 방 생성/참여 가능
+- **실시간 동기화** — Yjs CRDT + WebRTC P2P로 실시간 동시 편집
+- **로그인 없음** — 누구나 바로 참여
 
 ## 기술 스택
 
 | 영역 | 기술 |
 |---|---|
 | 프레임워크 | SvelteKit (Svelte 5) |
-| 실시간 동기화 | Yjs + Supabase Realtime |
+| 실시간 동기화 | Yjs + WebRTC (P2P) |
 | 에디터 | WYSIWYG 마크다운 (블록 에디터) |
-| 인증 | Supabase Auth (OAuth + 이메일) |
 | 스타일링 | Tailwind CSS v4 |
 | 배포 | Vercel |
 | 테스트 | Vitest (브라우저 + Node) |
@@ -33,8 +32,8 @@
 - Yjs CRDT로 실시간 동시 편집 (충돌 없음)
 
 ### 사용자
-- **로그인 유저** — OAuth(Google, GitHub 등) 또는 이메일 로그인. 닉네임/아이디 설정 가능
-- **게스트** — 로그인 없이 참여. 닉네임/아이디는 `Guest(난수)` 또는 사용자 지정. localStorage에 저장
+- 로그인 없이 바로 참여
+- 닉네임은 `Guest(난수)` 자동 부여 또는 사용자 지정. localStorage에 저장
 
 ### Presence
 - 현재 방에 접속한 사용자 닉네임 표시
