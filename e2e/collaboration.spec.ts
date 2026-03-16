@@ -1,0 +1,171 @@
+import { test, expect, type BrowserContext } from '@playwright/test';
+
+test.describe('Landing page', () => {
+	test('should create a new room and navigate to it', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForLoadState('networkidle');
+
+		await page.getByRole('button', { name: '새 방 만들기' }).click();
+
+		await expect(page).toHaveURL(/\/room\/[a-z0-9]+/);
+		await expect(page.locator('.tiptap')).toBeVisible({ timeout: 10000 });
+	});
+
+	test('should join a room by code', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForLoadState('networkidle');
+
+		await page.getByPlaceholder('방 코드 입력').fill('abcd1234');
+		await page.getByRole('button', { name: '참여하기' }).click();
+
+		await expect(page).toHaveURL('/room/abcd1234');
+	});
+
+	test('should show error for invalid room code', async ({ page }) => {
+		await page.goto('/');
+		await page.waitForLoadState('networkidle');
+
+		await page.getByPlaceholder('방 코드 입력').fill('ab');
+		await page.getByRole('button', { name: '참여하기' }).click();
+
+		await expect(page.getByText('올바른 방 코드를 입력해주세요')).toBeVisible();
+	});
+});
+
+test.describe('Room page', () => {
+	test('should render editor and room header', async ({ page }) => {
+		await page.goto('/room/e2e-test-basic');
+
+		await expect(page.getByText('Room: e2e-test-basic')).toBeVisible();
+		await expect(page.locator('.tiptap')).toBeVisible({ timeout: 10000 });
+	});
+
+	test('should display nickname that is clickable for editing', async ({ page }) => {
+		await page.goto('/room/e2e-test-nick');
+
+		// Guest nickname should appear
+		const nickButton = page.locator('button', { hasText: /Guest\d+/ });
+		await expect(nickButton).toBeVisible({ timeout: 5000 });
+
+		// Click to edit
+		await nickButton.click();
+		const input = page.locator('input[type="text"]').first();
+		await expect(input).toBeVisible();
+	});
+
+	test('should allow typing in the editor', async ({ page }) => {
+		await page.goto('/room/e2e-test-typing');
+
+		const editor = page.locator('.tiptap');
+		await editor.waitFor({ timeout: 10000 });
+
+		await editor.click();
+		await page.keyboard.type('Hello syncingsh!');
+
+		await expect(editor).toContainText('Hello syncingsh!');
+	});
+});
+
+test.describe('Real-time collaboration', () => {
+	test('two tabs should sync content via BroadcastChannel', async ({ context }) => {
+		const roomPath = '/room/e2e-sync-test';
+
+		const page1 = await context.newPage();
+		const page2 = await context.newPage();
+
+		await page1.goto(roomPath);
+		await page2.goto(roomPath);
+
+		// Wait for both editors to load
+		const editor1 = page1.locator('.tiptap');
+		const editor2 = page2.locator('.tiptap');
+		await editor1.waitFor({ timeout: 10000 });
+		await editor2.waitFor({ timeout: 10000 });
+
+		// Type in page1
+		await editor1.click();
+		await page1.keyboard.type('Synced message from tab 1');
+
+		// Verify it appears in page2
+		await expect(editor2).toContainText('Synced message from tab 1', { timeout: 10000 });
+	});
+
+	test('presence should update when peer connects', async ({ context }) => {
+		const roomPath = '/room/e2e-presence-test';
+
+		const page1 = await context.newPage();
+		await page1.goto(roomPath);
+		await page1.locator('.tiptap').waitFor({ timeout: 10000 });
+
+		// Initially no peers
+		await expect(page1.getByText(/명/)).not.toBeVisible();
+
+		// Open second tab
+		const page2 = await context.newPage();
+		await page2.goto(roomPath);
+		await page2.locator('.tiptap').waitFor({ timeout: 10000 });
+
+		// page1 should show peer presence
+		await expect(page1.getByText(/1명/)).toBeVisible({ timeout: 10000 });
+	});
+});
+
+test.describe('WebRTC signaling sync', () => {
+	let context1: BrowserContext;
+	let context2: BrowserContext;
+
+	test.beforeEach(async ({ browser }) => {
+		// Separate browser contexts = separate browsers (no BroadcastChannel)
+		context1 = await browser.newContext();
+		context2 = await browser.newContext();
+	});
+
+	test.afterEach(async () => {
+		await context1.close();
+		await context2.close();
+	});
+
+	test('two separate browsers should sync via WebRTC signaling server', async () => {
+		const roomPath = '/room/e2e-webrtc-sync';
+
+		const page1 = await context1.newPage();
+		const page2 = await context2.newPage();
+
+		await page1.goto(roomPath);
+		await page2.goto(roomPath);
+
+		const editor1 = page1.locator('.tiptap');
+		const editor2 = page2.locator('.tiptap');
+		await editor1.waitFor({ timeout: 10000 });
+		await editor2.waitFor({ timeout: 10000 });
+
+		// Wait for WebRTC connection to establish
+		await page1.waitForTimeout(2000);
+
+		// Type in page1
+		await editor1.click();
+		await page1.keyboard.type('WebRTC sync works!');
+
+		// Verify it appears in page2 via signaling server
+		await expect(editor2).toContainText('WebRTC sync works!', { timeout: 15000 });
+	});
+
+	test('presence should work across separate browsers', async () => {
+		const roomPath = '/room/e2e-webrtc-presence';
+
+		const page1 = await context1.newPage();
+		await page1.goto(roomPath);
+		await page1.locator('.tiptap').waitFor({ timeout: 10000 });
+
+		// No peers initially
+		await expect(page1.getByText(/명/)).not.toBeVisible();
+
+		// Connect second browser
+		const page2 = await context2.newPage();
+		await page2.goto(roomPath);
+		await page2.locator('.tiptap').waitFor({ timeout: 10000 });
+
+		// Presence should update via signaling
+		await expect(page1.getByText(/1명/)).toBeVisible({ timeout: 15000 });
+	});
+});
