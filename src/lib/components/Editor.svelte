@@ -4,6 +4,8 @@
 	import StarterKit from '@tiptap/starter-kit';
 	import Collaboration from '@tiptap/extension-collaboration';
 	import Placeholder from '@tiptap/extension-placeholder';
+	import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+	import { common, createLowlight } from 'lowlight';
 	import type * as Y from 'yjs';
 
 	interface Props {
@@ -14,18 +16,24 @@
 
 	let element: HTMLDivElement;
 
+	const lowlight = createLowlight(common);
+
 	onMount(() => {
 		const editor = new Editor({
 			element,
 			extensions: [
 				StarterKit.configure({
-					undoRedo: false
+					undoRedo: false,
+					codeBlock: false
 				}),
 				Collaboration.configure({
 					document: ydoc
 				}),
 				Placeholder.configure({
 					placeholder: '여기에 입력하세요...'
+				}),
+				CodeBlockLowlight.configure({
+					lowlight
 				})
 			],
 			editorProps: {
@@ -117,6 +125,62 @@
 	.editor-wrapper :global(.tiptap pre code) {
 		background: none;
 		padding: 0;
+	}
+
+	/* Syntax highlighting (lowlight / highlight.js tokens) */
+	.editor-wrapper :global(.hljs-comment),
+	.editor-wrapper :global(.hljs-quote) {
+		color: #6a9955;
+	}
+
+	.editor-wrapper :global(.hljs-variable),
+	.editor-wrapper :global(.hljs-template-variable),
+	.editor-wrapper :global(.hljs-tag),
+	.editor-wrapper :global(.hljs-name),
+	.editor-wrapper :global(.hljs-selector-id),
+	.editor-wrapper :global(.hljs-selector-class),
+	.editor-wrapper :global(.hljs-regexp),
+	.editor-wrapper :global(.hljs-deletion) {
+		color: #f44747;
+	}
+
+	.editor-wrapper :global(.hljs-number),
+	.editor-wrapper :global(.hljs-built_in),
+	.editor-wrapper :global(.hljs-literal),
+	.editor-wrapper :global(.hljs-type),
+	.editor-wrapper :global(.hljs-params),
+	.editor-wrapper :global(.hljs-meta),
+	.editor-wrapper :global(.hljs-link) {
+		color: #b5cea8;
+	}
+
+	.editor-wrapper :global(.hljs-attribute) {
+		color: #9cdcfe;
+	}
+
+	.editor-wrapper :global(.hljs-string),
+	.editor-wrapper :global(.hljs-symbol),
+	.editor-wrapper :global(.hljs-bullet),
+	.editor-wrapper :global(.hljs-addition) {
+		color: #ce9178;
+	}
+
+	.editor-wrapper :global(.hljs-title),
+	.editor-wrapper :global(.hljs-section) {
+		color: #dcdcaa;
+	}
+
+	.editor-wrapper :global(.hljs-keyword),
+	.editor-wrapper :global(.hljs-selector-tag) {
+		color: #569cd6;
+	}
+
+	.editor-wrapper :global(.hljs-emphasis) {
+		font-style: italic;
+	}
+
+	.editor-wrapper :global(.hljs-strong) {
+		font-weight: 700;
 	}
 
 	/* Blockquote */
