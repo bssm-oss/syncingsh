@@ -31,6 +31,34 @@
 			editorProps: {
 				attributes: {
 					class: 'focus:outline-none min-h-[500px]'
+				},
+				handleKeyDown(view, event) {
+					if (event.key === 'Tab') {
+						event.preventDefault();
+						const { state, dispatch } = view;
+						const { selection } = state;
+						const from = selection.$from;
+
+						// In code blocks, insert a tab character; elsewhere use 2 spaces
+						const isCodeBlock = from.parent.type.name === 'codeBlock';
+						const indent = isCodeBlock ? '\t' : '  ';
+
+						if (event.shiftKey) {
+							// Outdent: remove leading indent from the current line
+							const lineStart = from.start();
+							const lineText = from.parent.textContent;
+							const leadingChars = lineText.match(/^(\t|  )/);
+							if (leadingChars) {
+								const removeLength = leadingChars[0].length;
+								dispatch(state.tr.delete(lineStart, lineStart + removeLength));
+							}
+						} else {
+							// Indent: insert at cursor position
+							dispatch(state.tr.insertText(indent));
+						}
+						return true;
+					}
+					return false;
 				}
 			}
 		});
