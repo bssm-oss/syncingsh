@@ -1,16 +1,32 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { generateRoomCode, isValidRoomCode } from '$lib/utils/roomCode';
+	import { getNickname, setNickname } from '$lib/utils/nickname';
 
 	let joinCode = $state('');
 	let error = $state('');
+	let nickname = $state('');
+
+	onMount(() => {
+		nickname = getNickname();
+	});
+
+	function handleNicknameBlur() {
+		const trimmed = nickname.trim();
+		if (trimmed) {
+			setNickname(trimmed);
+		}
+	}
 
 	function createRoom() {
+		if (nickname.trim()) setNickname(nickname.trim());
 		const code = generateRoomCode();
 		goto(`/room/${code}`);
 	}
 
 	function joinRoom() {
+		if (nickname.trim()) setNickname(nickname.trim());
 		const code = joinCode.trim().toLowerCase();
 		if (!isValidRoomCode(code)) {
 			error = '올바른 방 코드를 입력해주세요';
@@ -26,6 +42,19 @@
 		<div class="text-center">
 			<h1 class="text-3xl font-bold text-gray-900">syncingsh</h1>
 			<p class="mt-2 text-gray-500">실시간 공유 메모장</p>
+		</div>
+
+		<div class="space-y-1">
+			<label for="nickname" class="text-sm font-medium text-gray-600">닉네임</label>
+			<input
+				id="nickname"
+				type="text"
+				bind:value={nickname}
+				onblur={handleNicknameBlur}
+				placeholder="닉네임을 입력하세요"
+				maxlength="30"
+				class="w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+			/>
 		</div>
 
 		<button
