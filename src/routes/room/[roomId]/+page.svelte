@@ -48,7 +48,7 @@
 		const doc = new Y.Doc();
 
 		const signalingUrl = import.meta.env.DEV
-			? 'ws://localhost:4444'
+			? `ws://${window.location.hostname}:4444`
 			: 'wss://signaling.yjs.dev';
 
 		const webrtcProvider = new WebrtcProvider(roomId, doc, {
