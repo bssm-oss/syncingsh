@@ -4,10 +4,23 @@
 
 	let joinCode = $state('');
 	let error = $state('');
+	let customRoomName = $state('');
+	let createError = $state('');
 
 	function createRoom() {
-		const code = generateRoomCode();
-		goto(`/room/${code}`);
+		const name = customRoomName.trim().toLowerCase();
+		if (name) {
+			if (!isValidRoomCode(name)) {
+				createError = '4~12자의 영문 소문자, 숫자만 사용 가능합니다';
+				return;
+			}
+			createError = '';
+			goto(`/room/${name}`);
+		} else {
+			createError = '';
+			const code = generateRoomCode();
+			goto(`/room/${code}`);
+		}
 	}
 
 	function joinRoom() {
@@ -28,12 +41,23 @@
 			<p class="mt-2 text-gray-500">실시간 공유 메모장</p>
 		</div>
 
-		<button
-			onclick={createRoom}
-			class="w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white transition hover:bg-gray-800"
-		>
-			새 방 만들기
-		</button>
+		<div class="space-y-3">
+			<input
+				type="text"
+				bind:value={customRoomName}
+				placeholder="방 이름 입력 (선택, 비우면 자동 생성)"
+				class="w-full rounded-lg border border-gray-300 px-4 py-3 text-center placeholder:text-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+			/>
+			{#if createError}
+				<p class="text-center text-sm text-red-500">{createError}</p>
+			{/if}
+			<button
+				onclick={createRoom}
+				class="w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white transition hover:bg-gray-800"
+			>
+				새 방 만들기
+			</button>
+		</div>
 
 		<div class="flex items-center gap-3">
 			<div class="h-px flex-1 bg-gray-200"></div>
