@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { Editor } from '@tiptap/core';
 	import StarterKit from '@tiptap/starter-kit';
 	import Collaboration from '@tiptap/extension-collaboration';
@@ -7,22 +6,23 @@
 	import type * as Y from 'yjs';
 
 	interface Props {
-		ydoc: Y.Doc;
+		fragment: Y.XmlFragment;
 	}
 
-	let { ydoc }: Props = $props();
+	let { fragment }: Props = $props();
 
-	let element: HTMLDivElement;
+	let element: HTMLDivElement | undefined = $state();
+	let editor: Editor | undefined = $state();
 
-	onMount(() => {
-		const editor = new Editor({
-			element,
+	function createEditor(el: HTMLDivElement, frag: Y.XmlFragment) {
+		return new Editor({
+			element: el,
 			extensions: [
 				StarterKit.configure({
 					undoRedo: false
 				}),
 				Collaboration.configure({
-					document: ydoc
+					fragment: frag
 				}),
 				Placeholder.configure({
 					placeholder: '여기에 입력하세요...'
@@ -34,9 +34,18 @@
 				}
 			}
 		});
+	}
+
+	$effect(() => {
+		if (!element) return;
+		const frag = fragment;
+
+		editor?.destroy();
+		editor = createEditor(element, frag);
 
 		return () => {
-			editor.destroy();
+			editor?.destroy();
+			editor = undefined;
 		};
 	});
 </script>
