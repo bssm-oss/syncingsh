@@ -8,9 +8,10 @@
 
 	interface Props {
 		ydoc: Y.Doc;
+		editorInstance?: Editor | null;
 	}
 
-	let { ydoc }: Props = $props();
+	let { ydoc, editorInstance = $bindable(null) }: Props = $props();
 
 	let element: HTMLDivElement;
 
@@ -35,8 +36,11 @@
 			}
 		});
 
+		editorInstance = editor;
+
 		return () => {
 			editor.destroy();
+			editorInstance = null;
 		};
 	});
 </script>
