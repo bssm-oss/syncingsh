@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: syncingsh-signaling
+    runtime: node
+    plan: free
+    rootDir: signaling
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000

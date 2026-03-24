@@ -47,12 +47,15 @@
 		const userColor = getUserColor();
 		const doc = new Y.Doc();
 
-		const signalingUrl = import.meta.env.DEV
-			? `ws://${window.location.hostname}:4444`
-			: 'wss://signaling.yjs.dev';
+		const signalingUrls = import.meta.env.DEV
+			? [`ws://${window.location.hostname}:4444`]
+			: [
+					'wss://syncingsh-signaling.onrender.com',
+					'wss://y-webrtc-signaling.onrender.com'
+				];
 
 		const webrtcProvider = new WebrtcProvider(roomId, doc, {
-			signaling: [signalingUrl],
+			signaling: signalingUrls,
 			maxConns: 20,
 			filterBcConns: false
 		});
