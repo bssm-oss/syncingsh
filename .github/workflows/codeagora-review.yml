@@ -15,62 +15,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout CodeAgora
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: CodeAgora Review
+        uses: bssm-oss/CodeAgora@main
         with:
-          repository: bssm-oss/CodeAgora
-          path: codeagora
-
-      - name: Checkout target repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          path: target
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          package_json_file: codeagora/package.json
-
-      - name: Install CodeAgora dependencies
-        run: cd codeagora && pnpm install --frozen-lockfile
-
-      - name: Fetch PR diff
-        run: |
-          gh pr diff "$PR_NUMBER" \
-            --repo "$REPO" \
-            > /tmp/codeagora-pr.diff
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fail-on-reject: 'true'
+          max-diff-lines: '5000'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
-
-      - name: Copy config
-        run: |
-          mkdir -p codeagora/.ca
-          cp target/.ca/config.json codeagora/.ca/config.json
-          if [ -d "target/.ca/personas" ]; then
-            cp -r target/.ca/personas codeagora/.ca/personas
-          fi
-
-      - name: Run CodeAgora review
-        working-directory: codeagora
-        run: |
-          npx tsx packages/github/src/action.ts \
-            --diff /tmp/codeagora-pr.diff \
-            --pr "$PR_NUMBER" \
-            --sha "$HEAD_SHA" \
-            --repo "$REPO" \
-            --fail-on-reject true \
-            --max-diff-lines 5000
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          REPO: ${{ github.repository }}
