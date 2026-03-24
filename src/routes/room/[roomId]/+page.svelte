@@ -54,48 +54,47 @@
 					'wss://y-webrtc-signaling.onrender.com'
 				];
 
-		const iceServers: { urls: string; username?: string; credential?: string }[] = [
-			{ urls: 'stun:stun.l.google.com:19302' },
-			{ urls: 'stun:stun1.l.google.com:19302' }
-		];
+		let webrtcProvider: WebrtcProvider;
 
-		const turnUrl = import.meta.env.VITE_TURN_URL;
-		const turnUser = import.meta.env.VITE_TURN_USERNAME;
-		const turnCred = import.meta.env.VITE_TURN_CREDENTIAL;
-		if (turnUrl && turnUser && turnCred) {
-			iceServers.push({ urls: turnUrl, username: turnUser, credential: turnCred });
+		const startProvider = (iceServers?: RTCIceServer[]) => {
+			webrtcProvider = new WebrtcProvider(roomId, doc, {
+				signaling: signalingUrls,
+				...(iceServers && { peerOpts: { config: { iceServers } } }),
+				maxConns: 20,
+				filterBcConns: false
+			});
+
+			webrtcProvider.on('synced', () => {
+				connectionStatus = 'connected';
+			});
+
+			webrtcProvider.on('status', (event: { connected: boolean }) => {
+				connectionStatus = event.connected ? 'connected' : 'connecting';
+			});
+
+			webrtcProvider.awareness.setLocalStateField('user', {
+				name: nickname,
+				color: userColor
+			});
+
+			ydoc = doc;
+			awareness = webrtcProvider.awareness;
+			connectionStatus = 'connecting';
+		};
+
+		const meteredApiKey = import.meta.env.VITE_METERED_API_KEY;
+		if (meteredApiKey) {
+			fetch(`https://syncingsh.metered.live/api/v1/turn/credentials?apiKey=${meteredApiKey}`)
+				.then((res) => res.json())
+				.then((servers: RTCIceServer[]) => startProvider(servers))
+				.catch(() => startProvider());
+		} else {
+			startProvider();
 		}
 
-		const webrtcProvider = new WebrtcProvider(roomId, doc, {
-			signaling: signalingUrls,
-			peerOpts: {
-				config: { iceServers }
-			},
-			maxConns: 20,
-			filterBcConns: false
-		});
-
-		webrtcProvider.on('synced', () => {
-			connectionStatus = 'connected';
-		});
-
-		webrtcProvider.on('status', (event: { connected: boolean }) => {
-			connectionStatus = event.connected ? 'connected' : 'connecting';
-		});
-
-		// Set local user info for presence
-		webrtcProvider.awareness.setLocalStateField('user', {
-			name: nickname,
-			color: userColor
-		});
-
-		ydoc = doc;
-		awareness = webrtcProvider.awareness;
-		connectionStatus = 'connecting';
-
 		return () => {
-			webrtcProvider.disconnect();
-			webrtcProvider.destroy();
+			webrtcProvider?.disconnect();
+			webrtcProvider?.destroy();
 			doc.destroy();
 		};
 	});
