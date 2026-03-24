@@ -54,8 +54,23 @@
 					'wss://y-webrtc-signaling.onrender.com'
 				];
 
+		const iceServers: { urls: string; username?: string; credential?: string }[] = [
+			{ urls: 'stun:stun.l.google.com:19302' },
+			{ urls: 'stun:stun1.l.google.com:19302' }
+		];
+
+		const turnUrl = import.meta.env.VITE_TURN_URL;
+		const turnUser = import.meta.env.VITE_TURN_USERNAME;
+		const turnCred = import.meta.env.VITE_TURN_CREDENTIAL;
+		if (turnUrl && turnUser && turnCred) {
+			iceServers.push({ urls: turnUrl, username: turnUser, credential: turnCred });
+		}
+
 		const webrtcProvider = new WebrtcProvider(roomId, doc, {
 			signaling: signalingUrls,
+			peerOpts: {
+				config: { iceServers }
+			},
 			maxConns: 20,
 			filterBcConns: false
 		});
