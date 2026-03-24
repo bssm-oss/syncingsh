@@ -22,20 +22,22 @@ describe('generateRoomCode', () => {
 });
 
 describe('isValidRoomCode', () => {
-	it('should accept valid codes (4-12 lowercase alphanumeric)', () => {
+	it('should accept valid codes (2-20 lowercase alphanumeric)', () => {
+		expect(isValidRoomCode('ab')).toBe(true);
 		expect(isValidRoomCode('abcd')).toBe(true);
 		expect(isValidRoomCode('abc1234')).toBe(true);
 		expect(isValidRoomCode('abcdefghijkl')).toBe(true);
+		expect(isValidRoomCode('godfield')).toBe(true);
+		expect(isValidRoomCode('abcdefghijklmnopqrst')).toBe(true); // 20 chars
 	});
 
 	it('should reject too short codes', () => {
-		expect(isValidRoomCode('abc')).toBe(false);
 		expect(isValidRoomCode('a')).toBe(false);
 		expect(isValidRoomCode('')).toBe(false);
 	});
 
 	it('should reject too long codes', () => {
-		expect(isValidRoomCode('abcdefghijklm')).toBe(false);
+		expect(isValidRoomCode('abcdefghijklmnopqrstu')).toBe(false); // 21 chars
 	});
 
 	it('should reject uppercase letters', () => {
