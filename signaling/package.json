@@ -1,13 +1,21 @@
 {
 	"name": "syncingsh-signaling",
 	"private": true,
-	"version": "1.0.0",
+	"version": "2.0.0",
 	"type": "module",
 	"scripts": {
-		"start": "node server.js"
+		"dev": "tsx watch src/index.ts",
+		"start": "node dist/index.js",
+		"build": "tsc"
 	},
 	"dependencies": {
-		"lib0": "^0.2.117",
-		"ws": "^8.19.0"
+		"@hono/node-server": "^1.14.1",
+		"@hono/node-ws": "^1.1.1",
+		"hono": "^4.7.11"
+	},
+	"devDependencies": {
+		"@types/node": "^22.15.2",
+		"tsx": "^4.19.4",
+		"typescript": "^5.8.3"
 	}
 }
