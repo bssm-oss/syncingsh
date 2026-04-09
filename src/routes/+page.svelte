@@ -18,6 +18,7 @@
 		if (trimmed) {
 			setNickname(trimmed);
 		}
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- path is already resolved by callers
 		goto(path);
 	}
 
