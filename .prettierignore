@@ -8,5 +8,8 @@ bun.lockb
 # CodeAgora
 .ca/
 
+# Build output
+signaling/dist/
+
 # Miscellaneous
 /static/
