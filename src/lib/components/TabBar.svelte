@@ -46,7 +46,7 @@
 	<div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
 		{#each tabs as tab (tab.id)}
 			<button
-				class="group flex min-w-0 max-w-48 shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 px-3 py-1.5 text-sm transition-colors {tab.id ===
+				class="group flex max-w-48 min-w-0 shrink-0 items-center gap-1.5 rounded-t-lg border border-b-0 px-3 py-1.5 text-sm transition-colors {tab.id ===
 				activeTabId
 					? 'border-gray-200 bg-white text-gray-900'
 					: 'border-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700'}"
@@ -71,7 +71,7 @@
 									editingName = '';
 								}
 							}}
-							class="w-24 rounded border border-gray-300 px-1 py-0 text-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+							class="w-24 rounded border border-gray-300 px-1 py-0 text-sm focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none"
 							use:focusOnMount
 						/>
 					</form>
@@ -82,7 +82,7 @@
 					<span
 						role="button"
 						tabindex="0"
-						class="ml-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-gray-400 opacity-0 transition-opacity hover:bg-gray-200 hover:text-gray-600 group-hover:opacity-100 {tab.id ===
+						class="ml-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-gray-200 hover:text-gray-600 {tab.id ===
 						activeTabId
 							? 'opacity-60'
 							: ''}"

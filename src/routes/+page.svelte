@@ -52,7 +52,7 @@
 				type="text"
 				bind:value={joinCode}
 				placeholder="방 코드 입력"
-				class="w-full rounded-lg border border-gray-300 px-4 py-3 text-center text-lg tracking-widest placeholder:text-sm placeholder:tracking-normal focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+				class="w-full rounded-lg border border-gray-300 px-4 py-3 text-center text-lg tracking-widest placeholder:text-sm placeholder:tracking-normal focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none"
 			/>
 			{#if error}
 				<p class="text-center text-sm text-red-500">{error}</p>
