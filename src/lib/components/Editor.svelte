@@ -38,17 +38,17 @@
 						const { state, dispatch } = view;
 						const { selection } = state;
 						const { to, empty } = selection;
-						const $from = selection.$from;
+						const resolvedFrom = selection.resolvedFrom;
 
 						// In code blocks, insert a tab character; elsewhere use 2 spaces
-						const isCodeBlock = $from.parent.type.name === 'codeBlock';
+						const isCodeBlock = resolvedFrom.parent.type.name === 'codeBlock';
 						const indent = isCodeBlock ? '\t' : '  ';
 
 						if (event.shiftKey) {
 							// Outdent: remove leading indent from the current line
-							const parentText = $from.parent.textContent;
-							const lineOffset = parentText.lastIndexOf('\n', $from.parentOffset - 1) + 1;
-							const lineStart = $from.start() + lineOffset;
+							const parentText = resolvedFrom.parent.textContent;
+							const lineOffset = parentText.lastIndexOf('\n', resolvedFrom.parentOffset - 1) + 1;
+							const lineStart = resolvedFrom.start() + lineOffset;
 							const lineText = parentText.slice(lineOffset);
 							const leadingChars = lineText.match(/^(\t| {2})/);
 							if (leadingChars) {
@@ -57,13 +57,13 @@
 							}
 						} else if (!empty) {
 							// Indent each line covered by the selection
-							const blockStart = $from.start();
-							const blockText = $from.parent.textContent;
+							const blockStart = resolvedFrom.start();
+							const blockText = resolvedFrom.parent.textContent;
 
 							// Collect the document positions of each line start within the selection
 							const lineStarts: number[] = [];
 							// Always include the line that contains `from`
-							const firstLineOffset = blockText.lastIndexOf('\n', $from.parentOffset - 1) + 1;
+							const firstLineOffset = blockText.lastIndexOf('\n', resolvedFrom.parentOffset - 1) + 1;
 							lineStarts.push(blockStart + firstLineOffset);
 
 							// Walk through newlines between from and to that are in the same block
