@@ -99,7 +99,7 @@
 						<input
 							type="text"
 							bind:value={nickname}
-							class="w-32 rounded border border-gray-300 px-2 py-0.5 text-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+							class="w-32 rounded border border-gray-300 px-2 py-0.5 text-sm focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none"
 						/>
 						<button type="submit" class="text-sm text-gray-500 hover:text-gray-900">저장</button>
 					</form>
