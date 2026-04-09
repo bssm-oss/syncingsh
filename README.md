@@ -62,16 +62,16 @@ The signaling server only brokers initial WebRTC connections. All document data 
 ### Prerequisites
 
 - Node.js 20+
-- npm
+- [Bun](https://bun.sh)
 
 ### Setup
 
 ```bash
 # Install dependencies
-npm install
+bun install
 
 # Install signaling server dependencies
-cd signaling && npm install && cd ..
+cd signaling && bun install && cd ..
 ```
 
 ### Running locally
@@ -80,10 +80,10 @@ You need **two terminals** — the signaling server and the SvelteKit dev server
 
 ```bash
 # Terminal 1: Signaling server (ws://localhost:4444)
-npm run signaling
+bun run signaling
 
 # Terminal 2: SvelteKit dev server (http://localhost:5173)
-npm run dev
+bun run dev
 ```
 
 Open http://localhost:5173, create a room, and open the same URL in another tab to test real-time sync.
@@ -91,14 +91,14 @@ Open http://localhost:5173, create a room, and open the same URL in another tab 
 ### Tests
 
 ```bash
-npm test            # Unit tests (Vitest)
-npm run test:e2e    # E2E tests (Playwright)
+bun run test            # Unit tests (Vitest)
+bun run test:e2e        # E2E tests (Playwright)
 ```
 
 ### Build
 
 ```bash
-npm run build       # SvelteKit production build
+bun run build       # SvelteKit production build
 ```
 
 ## Deployment
