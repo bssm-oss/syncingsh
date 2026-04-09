@@ -2,9 +2,39 @@
 	import { onMount } from 'svelte';
 	import { Editor } from '@tiptap/core';
 	import StarterKit from '@tiptap/starter-kit';
+	import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 	import Collaboration from '@tiptap/extension-collaboration';
 	import Placeholder from '@tiptap/extension-placeholder';
+	import { createLowlight } from 'lowlight';
+	import javascript from 'highlight.js/lib/languages/javascript';
+	import typescript from 'highlight.js/lib/languages/typescript';
+	import python from 'highlight.js/lib/languages/python';
+	import go from 'highlight.js/lib/languages/go';
+	import rust from 'highlight.js/lib/languages/rust';
+	import java from 'highlight.js/lib/languages/java';
+	import xml from 'highlight.js/lib/languages/xml';
+	import css from 'highlight.js/lib/languages/css';
+	import json from 'highlight.js/lib/languages/json';
+	import bash from 'highlight.js/lib/languages/bash';
 	import type * as Y from 'yjs';
+
+	const lowlight = createLowlight();
+	lowlight.register('javascript', javascript);
+	lowlight.register('js', javascript);
+	lowlight.register('typescript', typescript);
+	lowlight.register('ts', typescript);
+	lowlight.register('python', python);
+	lowlight.register('py', python);
+	lowlight.register('go', go);
+	lowlight.register('rust', rust);
+	lowlight.register('rs', rust);
+	lowlight.register('java', java);
+	lowlight.register('html', xml);
+	lowlight.register('xml', xml);
+	lowlight.register('css', css);
+	lowlight.register('json', json);
+	lowlight.register('bash', bash);
+	lowlight.register('sh', bash);
 
 	interface Props {
 		ydoc: Y.Doc;
@@ -19,7 +49,12 @@
 			element,
 			extensions: [
 				StarterKit.configure({
-					undoRedo: false
+					undoRedo: false,
+					codeBlock: false
+				}),
+				CodeBlockLowlight.configure({
+					lowlight,
+					defaultLanguage: 'javascript'
 				}),
 				Collaboration.configure({
 					document: ydoc
@@ -163,6 +198,7 @@
 		font-family: 'JetBrains Mono', monospace;
 		font-size: 0.875rem;
 		overflow-x: auto;
+		position: relative;
 	}
 
 	.editor-wrapper :global(.tiptap code) {
@@ -175,6 +211,108 @@
 	.editor-wrapper :global(.tiptap pre code) {
 		background: none;
 		padding: 0;
+	}
+
+	/* Syntax highlighting - VS Code Dark+ theme */
+	.editor-wrapper :global(.tiptap pre code .hljs-keyword),
+	.editor-wrapper :global(.tiptap pre code .hljs-selector-tag) {
+		color: #569cd6;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-literal),
+	.editor-wrapper :global(.tiptap pre code .hljs-built_in) {
+		color: #4ec9b0;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-string),
+	.editor-wrapper :global(.tiptap pre code .hljs-template-variable) {
+		color: #ce9178;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-number),
+	.editor-wrapper :global(.tiptap pre code .hljs-selector-class) {
+		color: #b5cea8;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-comment),
+	.editor-wrapper :global(.tiptap pre code .hljs-quote) {
+		color: #6a9955;
+		font-style: italic;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-meta),
+	.editor-wrapper :global(.tiptap pre code .hljs-tag) {
+		color: #569cd6;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-attribute),
+	.editor-wrapper :global(.tiptap pre code .hljs-name) {
+		color: #9cdcfe;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-attr) {
+		color: #9cdcfe;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-type),
+	.editor-wrapper :global(.tiptap pre code .hljs-class .hljs-title) {
+		color: #4ec9b0;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-function),
+	.editor-wrapper :global(.tiptap pre code .hljs-title) {
+		color: #dcdcaa;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-variable),
+	.editor-wrapper :global(.tiptap pre code .hljs-params) {
+		color: #9cdcfe;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-regexp) {
+		color: #d16969;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-symbol),
+	.editor-wrapper :global(.tiptap pre code .hljs-bullet) {
+		color: #d4d4d4;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-punctuation) {
+		color: #d4d4d4;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-operator) {
+		color: #d4d4d4;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-property) {
+		color: #9cdcfe;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-template-tag) {
+		color: #569cd6;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-selector-id),
+	.editor-wrapper :global(.tiptap pre code .hljs-selector-attr),
+	.editor-wrapper :global(.tiptap pre code .hljs-selector-pseudo) {
+		color: #d7ba7d;
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-addition) {
+		color: #b5cea8;
+		background: rgba(155, 185, 85, 0.1);
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-deletion) {
+		color: #ce9178;
+		background: rgba(206, 145, 120, 0.1);
+	}
+
+	.editor-wrapper :global(.tiptap pre code .hljs-section) {
+		color: #569cd6;
+		font-weight: bold;
 	}
 
 	/* Blockquote */
