@@ -98,37 +98,54 @@
 		const userColor = getUserColor();
 		const doc = new Y.Doc();
 
-		const signalingUrl = import.meta.env.DEV
-			? `ws://${window.location.hostname}:4444`
-			: 'wss://signaling.yjs.dev';
+		const signalingUrls = import.meta.env.DEV
+			? [`ws://${window.location.hostname}:4444`]
+			: [
+					'wss://syncingsh-signaling.onrender.com',
+					'wss://y-webrtc-signaling.onrender.com'
+				];
 
-		const webrtcProvider = new WebrtcProvider(roomId, doc, {
-			signaling: [signalingUrl],
-			maxConns: 20,
-			filterBcConns: false
-		});
+		let webrtcProvider: WebrtcProvider;
 
-		webrtcProvider.on('synced', () => {
-			connectionStatus = 'connected';
-		});
+		const startProvider = (iceServers?: RTCIceServer[]) => {
+			webrtcProvider = new WebrtcProvider(roomId, doc, {
+				signaling: signalingUrls,
+				...(iceServers && { peerOpts: { config: { iceServers } } }),
+				maxConns: 20,
+				filterBcConns: false
+			});
 
-		webrtcProvider.on('status', (event: { connected: boolean }) => {
-			connectionStatus = event.connected ? 'connected' : 'connecting';
-		});
+			webrtcProvider.on('synced', () => {
+				connectionStatus = 'connected';
+			});
 
-		// Set local user info for presence
-		webrtcProvider.awareness.setLocalStateField('user', {
-			name: nickname,
-			color: userColor
-		});
+			webrtcProvider.on('status', (event: { connected: boolean }) => {
+				connectionStatus = event.connected ? 'connected' : 'connecting';
+			});
 
-		ydoc = doc;
-		awareness = webrtcProvider.awareness;
-		connectionStatus = 'connecting';
+			webrtcProvider.awareness.setLocalStateField('user', {
+				name: nickname,
+				color: userColor
+			});
+
+			ydoc = doc;
+			awareness = webrtcProvider.awareness;
+			connectionStatus = 'connecting';
+		};
+
+		const meteredApiKey = import.meta.env.VITE_METERED_API_KEY;
+		if (meteredApiKey) {
+			fetch(`https://syncingsh.metered.live/api/v1/turn/credentials?apiKey=${meteredApiKey}`)
+				.then((res) => res.json())
+				.then((servers: RTCIceServer[]) => startProvider(servers))
+				.catch(() => startProvider());
+		} else {
+			startProvider();
+		}
 
 		return () => {
-			webrtcProvider.disconnect();
-			webrtcProvider.destroy();
+			webrtcProvider?.disconnect();
+			webrtcProvider?.destroy();
 			doc.destroy();
 		};
 	});
