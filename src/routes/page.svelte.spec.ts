@@ -29,7 +29,7 @@ describe('/+page.svelte', () => {
 		render(Page);
 
 		const input = page.getByPlaceholder('방 코드 입력');
-		await input.fill('ab');
+		await input.fill('a');
 
 		const joinButton = page.getByText('참여하기');
 		await joinButton.click();
