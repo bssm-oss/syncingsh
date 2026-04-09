@@ -100,10 +100,7 @@
 
 		const signalingUrls = import.meta.env.DEV
 			? [`ws://${window.location.hostname}:4444`]
-			: [
-					'wss://syncingsh-signaling.onrender.com',
-					'wss://y-webrtc-signaling.onrender.com'
-				];
+			: ['wss://syncingsh-signaling.onrender.com', 'wss://y-webrtc-signaling.onrender.com'];
 
 		let webrtcProvider: WebrtcProvider;
 
