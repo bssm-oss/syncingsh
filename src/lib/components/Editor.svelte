@@ -37,7 +37,7 @@
 						event.preventDefault();
 						const { state, dispatch } = view;
 						const { selection } = state;
-						const { from, to, empty } = selection;
+						const { to, empty } = selection;
 						const $from = selection.$from;
 
 						// In code blocks, insert a tab character; elsewhere use 2 spaces
@@ -57,7 +57,6 @@
 							}
 						} else if (!empty) {
 							// Indent each line covered by the selection
-							const $to = selection.$to;
 							const blockStart = $from.start();
 							const blockText = $from.parent.textContent;
 
