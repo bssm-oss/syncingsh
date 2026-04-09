@@ -24,7 +24,7 @@ const send = (conn, message) => {
 	}
 	try {
 		conn.send(JSON.stringify(message));
-	} catch (_e) {
+	} catch {
 		conn.close();
 	}
 };
@@ -42,7 +42,7 @@ const onconnection = (conn) => {
 			pongReceived = false;
 			try {
 				conn.ping();
-			} catch (_e) {
+			} catch {
 				conn.close();
 			}
 		}
