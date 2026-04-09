@@ -41,7 +41,7 @@
 
 {#if users.length > 0}
 	<div class="flex items-center gap-1.5">
-		{#each users as user}
+		{#each users as user (user.name)}
 			<span
 				class="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium text-white"
 				style="background-color: {user.color}"
