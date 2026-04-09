@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolveRoute } from '$app/paths';
 	import { generateRoomCode, isValidRoomCode } from '$lib/utils/roomCode';
 
 	let joinCode = $state('');
@@ -7,7 +8,7 @@
 
 	function createRoom() {
 		const code = generateRoomCode();
-		goto(`/room/${code}`);
+		goto(resolveRoute('/room/[roomId]', { roomId: code }));
 	}
 
 	function joinRoom() {
@@ -17,7 +18,7 @@
 			return;
 		}
 		error = '';
-		goto(`/room/${code}`);
+		goto(resolveRoute('/room/[roomId]', { roomId: code }));
 	}
 </script>
 
