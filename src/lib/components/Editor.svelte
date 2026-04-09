@@ -47,7 +47,7 @@
 							// Outdent: remove leading indent from the current line
 							const lineStart = from.start();
 							const lineText = from.parent.textContent;
-							const leadingChars = lineText.match(/^(\t|  )/);
+							const leadingChars = lineText.match(/^(\t| {2})/);
 							if (leadingChars) {
 								const removeLength = leadingChars[0].length;
 								dispatch(state.tr.delete(lineStart, lineStart + removeLength));
