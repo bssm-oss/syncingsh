@@ -73,10 +73,7 @@
 
 		const signalingUrls = import.meta.env.DEV
 			? [`ws://${window.location.hostname}:4444`]
-			: [
-					'wss://syncingsh-signaling.onrender.com',
-					'wss://y-webrtc-signaling.onrender.com'
-				];
+			: ['wss://syncingsh-signaling.onrender.com', 'wss://y-webrtc-signaling.onrender.com'];
 
 		let provider: WebrtcProvider | null = null;
 		let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -90,9 +87,10 @@
 			}
 		}
 
-		function createProvider(): WebrtcProvider {
+		function createProvider(iceServers?: RTCIceServer[]): WebrtcProvider {
 			const webrtcProvider = new WebrtcProvider(currentRoomId, doc, {
 				signaling: signalingUrls,
+				...(iceServers && { peerOpts: { config: { iceServers } } }),
 				maxConns: 20,
 				filterBcConns: false
 			});
@@ -175,10 +173,7 @@
 
 			if (document.visibilityState === 'visible') {
 				// Tab became visible — check if we need to reconnect
-				if (
-					connectionStatus !== 'connected' ||
-					(provider && !provider.connected)
-				) {
+				if (connectionStatus !== 'connected' || (provider && !provider.connected)) {
 					reconnectAttempt = 0;
 					isReconnecting = true;
 					attemptReconnect();
@@ -201,17 +196,28 @@
 			}
 		}
 
-		// Create initial provider
-		provider = createProvider();
-		ydoc = doc;
-		awareness = provider.awareness;
-		connectionStatus = 'connecting';
+		const startProvider = (iceServers?: RTCIceServer[]) => {
+			provider = createProvider(iceServers);
+			ydoc = doc;
+			awareness = provider.awareness;
+			connectionStatus = 'connecting';
+		};
 
 		// Listen for tab visibility changes
 		document.addEventListener('visibilitychange', handleVisibilityChange);
 
 		// Listen for network status changes
 		window.addEventListener('online', handleOnline);
+
+		const meteredApiKey = import.meta.env.VITE_METERED_API_KEY;
+		if (meteredApiKey) {
+			fetch(`https://syncingsh.metered.live/api/v1/turn/credentials?apiKey=${meteredApiKey}`)
+				.then((res) => res.json())
+				.then((servers: RTCIceServer[]) => startProvider(servers))
+				.catch(() => startProvider());
+		} else {
+			startProvider();
+		}
 
 		return () => {
 			destroyed = true;
@@ -230,7 +236,7 @@
 
 {#if showReconnectBanner}
 	<div
-		class="fixed left-0 right-0 top-0 z-50 flex items-center justify-center px-4 py-2 text-sm font-medium text-white"
+		class="fixed top-0 right-0 left-0 z-50 flex items-center justify-center px-4 py-2 text-sm font-medium text-white"
 		class:bg-yellow-500={reconnectAttempt < MAX_RECONNECT_ATTEMPTS}
 		class:bg-red-500={reconnectAttempt >= MAX_RECONNECT_ATTEMPTS}
 		role="alert"
@@ -279,7 +285,7 @@
 						<input
 							type="text"
 							bind:value={nickname}
-							class="w-32 rounded border border-gray-300 px-2 py-0.5 text-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+							class="w-32 rounded border border-gray-300 px-2 py-0.5 text-sm focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none"
 						/>
 						<button type="submit" class="text-sm text-gray-500 hover:text-gray-900">저장</button>
 					</form>
