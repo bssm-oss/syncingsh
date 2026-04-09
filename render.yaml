@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     rootDir: signaling
-    buildCommand: npm install
+    buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
       - key: PORT
