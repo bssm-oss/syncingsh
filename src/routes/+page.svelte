@@ -1,27 +1,30 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { generateRoomCode, isValidRoomCode } from '$lib/utils/roomCode';
+	import { getNickname, setNickname, hasCustomNickname } from '$lib/utils/nickname';
 
 	let joinCode = $state('');
+	let nickname = $state('');
 	let error = $state('');
-	let showCustomCode = $state(false);
-	let customCode = $state('');
-	let createError = $state('');
+
+	onMount(() => {
+		nickname = hasCustomNickname() ? getNickname() : '';
+	});
+
+	function saveAndGo(path: string) {
+		const trimmed = nickname.trim();
+		if (trimmed || hasCustomNickname()) {
+			setNickname(trimmed);
+		}
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- path is already resolved by callers
+		goto(path);
+	}
 
 	function createRoom() {
-		if (showCustomCode && customCode.trim()) {
-			const code = customCode.trim().toLowerCase();
-			if (!isValidRoomCode(code)) {
-				createError = '영문 소문자, 숫자만 사용 가능 (2~20자)';
-				return;
-			}
-			createError = '';
-			goto(resolve('/room/[roomId]', { roomId: code }));
-		} else {
-			const code = generateRoomCode();
-			goto(resolve('/room/[roomId]', { roomId: code }));
-		}
+		const code = generateRoomCode();
+		saveAndGo(resolve('/room/[roomId]', { roomId: code }));
 	}
 
 	function joinRoom() {
@@ -31,7 +34,7 @@
 			return;
 		}
 		error = '';
-		goto(resolve('/room/[roomId]', { roomId: code }));
+		saveAndGo(resolve('/room/[roomId]', { roomId: code }));
 	}
 </script>
 
@@ -42,38 +45,25 @@
 			<p class="mt-2 text-gray-500">실시간 공유 메모장</p>
 		</div>
 
-		<div class="space-y-3">
-			{#if showCustomCode}
-				<div class="space-y-2">
-					<input
-						type="text"
-						bind:value={customCode}
-						placeholder="원하는 방 코드 입력 (예: godfield)"
-						class="w-full rounded-lg border border-gray-300 px-4 py-3 text-center text-lg tracking-widest placeholder:text-sm placeholder:tracking-normal focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none"
-					/>
-					<p class="text-center text-xs text-gray-400">
-						영문 소문자, 숫자만 사용 가능 (2~20자) · 비우면 랜덤 생성
-					</p>
-					{#if createError}
-						<p class="text-center text-sm text-red-500">{createError}</p>
-					{/if}
-				</div>
-			{/if}
-			<button
-				onclick={createRoom}
-				class="w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white transition hover:bg-gray-800"
-			>
-				{showCustomCode ? '방 만들기' : '새 방 만들기'}
-			</button>
-			{#if !showCustomCode}
-				<button
-					onclick={() => (showCustomCode = true)}
-					class="w-full text-center text-sm text-gray-400 transition hover:text-gray-600"
-				>
-					코드를 직접 정하고 싶다면?
-				</button>
-			{/if}
+		<div class="space-y-2">
+			<label for="nickname" class="block text-sm font-medium text-gray-700">닉네임</label>
+			<input
+				id="nickname"
+				type="text"
+				bind:value={nickname}
+				placeholder="닉네임을 입력하세요"
+				maxlength={20}
+				class="w-full rounded-lg border border-gray-300 px-4 py-3 text-center focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none"
+			/>
+			<p class="text-center text-xs text-gray-400">미입력 시 랜덤 닉네임이 부여됩니다</p>
 		</div>
+
+		<button
+			onclick={createRoom}
+			class="w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white transition hover:bg-gray-800"
+		>
+			새 방 만들기
+		</button>
 
 		<div class="flex items-center gap-3">
 			<div class="h-px flex-1 bg-gray-200"></div>

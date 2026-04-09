@@ -48,8 +48,7 @@
 		const doc = new Y.Doc();
 
 		const signalingUrls = import.meta.env.DEV
-			? [`ws://${window.location.hostname}:4444`]
-			: ['wss://signal.justn.me'];
+			? [`ws://${window.location.hostname}:4444`] : ['wss://signal.justn.me']
 
 		let webrtcProvider: WebrtcProvider;
 
