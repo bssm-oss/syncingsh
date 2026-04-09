@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"signaling": "node node_modules/y-webrtc/bin/server.js",
+		"signaling": "npm --prefix signaling run dev",
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
@@ -36,7 +36,6 @@
 		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.1.17",
 		"@types/node": "^24",
-		"@types/turndown": "^5.0.6",
 		"@vitest/browser-playwright": "^4.0.15",
 		"@vitest/coverage-v8": "^4.0.15",
 		"eslint": "^9.39.1",
@@ -62,11 +61,13 @@
 	},
 	"dependencies": {
 		"@tiptap/core": "^3.20.2",
+		"@tiptap/extension-code-block-lowlight": "^3.20.4",
 		"@tiptap/extension-collaboration": "^3.20.2",
 		"@tiptap/extension-placeholder": "^3.20.2",
 		"@tiptap/pm": "^3.20.2",
 		"@tiptap/starter-kit": "^3.20.2",
-		"turndown": "^7.2.2",
+		"highlight.js": "^11.11.0",
+		"lowlight": "^3.3.0",
 		"y-webrtc": "^10.3.0",
 		"yjs": "^13.6.29"
 	}

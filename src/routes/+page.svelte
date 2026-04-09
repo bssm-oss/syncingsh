@@ -1,14 +1,30 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { generateRoomCode, isValidRoomCode } from '$lib/utils/roomCode';
+	import { getNickname, setNickname, hasCustomNickname } from '$lib/utils/nickname';
 
 	let joinCode = $state('');
+	let nickname = $state('');
 	let error = $state('');
+
+	onMount(() => {
+		nickname = hasCustomNickname() ? getNickname() : '';
+	});
+
+	function saveAndGo(path: string) {
+		const trimmed = nickname.trim();
+		if (trimmed || hasCustomNickname()) {
+			setNickname(trimmed);
+		}
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- path is already resolved by callers
+		goto(path);
+	}
 
 	function createRoom() {
 		const code = generateRoomCode();
-		goto(resolve('/room/[roomId]', { roomId: code }));
+		saveAndGo(resolve('/room/[roomId]', { roomId: code }));
 	}
 
 	function joinRoom() {
@@ -18,7 +34,7 @@
 			return;
 		}
 		error = '';
-		goto(resolve('/room/[roomId]', { roomId: code }));
+		saveAndGo(resolve('/room/[roomId]', { roomId: code }));
 	}
 </script>
 
@@ -27,6 +43,19 @@
 		<div class="text-center">
 			<h1 class="text-3xl font-bold text-gray-900">syncingsh</h1>
 			<p class="mt-2 text-gray-500">실시간 공유 메모장</p>
+		</div>
+
+		<div class="space-y-2">
+			<label for="nickname" class="block text-sm font-medium text-gray-700">닉네임</label>
+			<input
+				id="nickname"
+				type="text"
+				bind:value={nickname}
+				placeholder="닉네임을 입력하세요"
+				maxlength={20}
+				class="w-full rounded-lg border border-gray-300 px-4 py-3 text-center focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none"
+			/>
+			<p class="text-center text-xs text-gray-400">미입력 시 랜덤 닉네임이 부여됩니다</p>
 		</div>
 
 		<button
