@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { resolveRoute } from '$app/paths';
+	import { resolve } from '$app/paths';
 	import { generateRoomCode, isValidRoomCode } from '$lib/utils/roomCode';
 	import { getNickname, setNickname, hasCustomNickname } from '$lib/utils/nickname';
 
@@ -23,7 +23,7 @@
 
 	function createRoom() {
 		const code = generateRoomCode();
-		saveAndGo(resolveRoute('/room/[roomId]', { roomId: code }));
+		saveAndGo(resolve('/room/[roomId]', { roomId: code }));
 	}
 
 	function joinRoom() {
@@ -33,7 +33,7 @@
 			return;
 		}
 		error = '';
-		saveAndGo(resolveRoute('/room/[roomId]', { roomId: code }));
+		saveAndGo(resolve('/room/[roomId]', { roomId: code }));
 	}
 </script>
 
