@@ -15,7 +15,7 @@
 
 	function saveAndGo(path: string) {
 		const trimmed = nickname.trim();
-		if (trimmed) {
+		if (trimmed || hasCustomNickname()) {
 			setNickname(trimmed);
 		}
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- path is already resolved by callers
