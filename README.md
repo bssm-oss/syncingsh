@@ -18,7 +18,8 @@ Real-time collaborative notepad. Share a room code and anyone can edit the same 
 | Real-time sync | Yjs + WebRTC (P2P) |
 | Editor | Tiptap (WYSIWYG block editor) |
 | Styling | Tailwind CSS v4 |
-| Deployment | Vercel |
+| Signaling | Hono + WebSocket (Node.js) |
+| Deployment | Vercel (frontend) + Render (signaling) |
 | Testing | Vitest + Playwright |
 
 ## Features
@@ -39,22 +40,72 @@ Real-time collaborative notepad. Share a room code and anyone can edit the same 
 ### Presence
 - Live display of connected users in the room
 
+## Architecture
+
+```
+Browser A ──┐                    ┌── Browser B
+            │  WebRTC P2P (Yjs)  │
+            └────────────────────┘
+                     │
+              signaling only
+                     │
+            ┌────────────────┐
+            │ Signaling Server│  ← Hono + WebSocket
+            │  (Render.com)  │     y-webrtc protocol
+            └────────────────┘
+```
+
+The signaling server only brokers initial WebRTC connections. All document data flows directly between browsers via P2P.
+
 ## Development
+
+### Prerequisites
+
+- Node.js 20+
+- npm
+
+### Setup
 
 ```bash
 # Install dependencies
-bun install
+npm install
 
-# Dev server
-bun run dev
-
-# Signaling server (for local P2P connections)
-bun run signaling
-
-# Tests
-bun run test        # Unit tests
-bun run test:e2e    # E2E tests
-
-# Build
-bun run build
+# Install signaling server dependencies
+cd signaling && npm install && cd ..
 ```
+
+### Running locally
+
+You need **two terminals** — the signaling server and the SvelteKit dev server:
+
+```bash
+# Terminal 1: Signaling server (ws://localhost:4444)
+npm run signaling
+
+# Terminal 2: SvelteKit dev server (http://localhost:5173)
+npm run dev
+```
+
+Open http://localhost:5173, create a room, and open the same URL in another tab to test real-time sync.
+
+### Tests
+
+```bash
+npm test            # Unit tests (Vitest)
+npm run test:e2e    # E2E tests (Playwright)
+```
+
+### Build
+
+```bash
+npm run build       # SvelteKit production build
+```
+
+## Deployment
+
+| Service | Platform | Config |
+|---|---|---|
+| Frontend (SvelteKit) | Vercel | Auto-deployed on push |
+| Signaling (Hono) | Render | `render.yaml` |
+
+See [`signaling/README.md`](signaling/README.md) for signaling server details.

@@ -17,7 +17,8 @@
 | 실시간 동기화 | Yjs + WebRTC (P2P) |
 | 에디터 | WYSIWYG 마크다운 (블록 에디터) |
 | 스타일링 | Tailwind CSS v4 |
-| 배포 | Vercel |
+| 시그널링 | Hono + WebSocket (Node.js) |
+| 배포 | Vercel (프론트) + Render (시그널링) |
 | 테스트 | Vitest + Playwright |
 
 ## 기능
@@ -38,22 +39,72 @@
 ### Presence
 - 현재 방에 접속한 사용자 닉네임 표시
 
+## 아키텍처
+
+```
+브라우저 A ──┐                    ┌── 브라우저 B
+            │  WebRTC P2P (Yjs)  │
+            └────────────────────┘
+                     │
+              시그널링만 중계
+                     │
+            ┌────────────────┐
+            │  시그널링 서버   │  ← Hono + WebSocket
+            │  (Render.com)  │     y-webrtc 프로토콜
+            └────────────────┘
+```
+
+시그널링 서버는 WebRTC 초기 연결만 중개. 문서 데이터는 브라우저 간 P2P로 직접 전송.
+
 ## 개발
+
+### 요구사항
+
+- Node.js 20+
+- npm
+
+### 설치
 
 ```bash
 # 의존성 설치
-bun install
+npm install
 
-# 개발 서버
-bun run dev
-
-# 시그널링 서버 (로컬 P2P 연결용)
-bun run signaling
-
-# 테스트
-bun run test        # 유닛 테스트
-bun run test:e2e    # E2E 테스트
-
-# 빌드
-bun run build
+# 시그널링 서버 의존성 설치
+cd signaling && npm install && cd ..
 ```
+
+### 로컬 실행
+
+**터미널 2개**가 필요합니다 — 시그널링 서버와 SvelteKit 개발 서버:
+
+```bash
+# 터미널 1: 시그널링 서버 (ws://localhost:4444)
+npm run signaling
+
+# 터미널 2: SvelteKit 개발 서버 (http://localhost:5173)
+npm run dev
+```
+
+http://localhost:5173 접속 → 방 생성 → 다른 탭에서 같은 URL 열면 실시간 동기화 테스트 가능.
+
+### 테스트
+
+```bash
+npm test            # 유닛 테스트 (Vitest)
+npm run test:e2e    # E2E 테스트 (Playwright)
+```
+
+### 빌드
+
+```bash
+npm run build       # SvelteKit 프로덕션 빌드
+```
+
+## 배포
+
+| 서비스 | 플랫폼 | 설정 |
+|---|---|---|
+| 프론트엔드 (SvelteKit) | Vercel | push 시 자동 배포 |
+| 시그널링 (Hono) | Render | `render.yaml` |
+
+시그널링 서버 상세: [`signaling/README.md`](signaling/README.md)
