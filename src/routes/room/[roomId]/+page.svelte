@@ -96,6 +96,7 @@
 			});
 
 			webrtcProvider.on('synced', () => {
+				clearReconnectTimer();
 				connectionStatus = 'connected';
 				reconnectAttempt = 0;
 				isReconnecting = false;
@@ -104,6 +105,7 @@
 
 			webrtcProvider.on('status', (event: { connected: boolean }) => {
 				if (event.connected) {
+					clearReconnectTimer();
 					connectionStatus = 'connected';
 					reconnectAttempt = 0;
 					isReconnecting = false;
@@ -114,6 +116,29 @@
 						disconnectTimestamp = Date.now();
 					}
 					scheduleReconnect();
+				}
+			});
+
+			// Track real peer liveness: the status/synced events only reflect signaling
+			// state, not actual WebRTC peer connectivity. Subscribe to the peers event
+			// to detect when all peers drop (e.g. network interruption) and trigger
+			// recovery. Guard against the initial empty-peer state before we ever had peers.
+			let hadPeers = false;
+			webrtcProvider.on('peers', (event: { webrtcPeers: string[]; bcPeers: string[] }) => {
+				if (destroyed) return;
+				const peerCount = event.webrtcPeers.length + event.bcPeers.length;
+				if (peerCount > 0) {
+					hadPeers = true;
+				} else if (hadPeers) {
+					// All previously-known peers have gone — treat as a potential disconnect
+					hadPeers = false;
+					if (connectionStatus === 'connected') {
+						connectionStatus = 'connecting';
+						if (!disconnectTimestamp) {
+							disconnectTimestamp = Date.now();
+						}
+						scheduleReconnect();
+					}
 				}
 			});
 
@@ -146,6 +171,7 @@
 
 		function attemptReconnect() {
 			if (destroyed) return;
+			clearReconnectTimer();
 			reconnectAttempt++;
 
 			// Destroy old provider and create a new one
@@ -174,6 +200,7 @@
 			if (document.visibilityState === 'visible') {
 				// Tab became visible — check if we need to reconnect
 				if (connectionStatus !== 'connected' || (provider && !provider.connected)) {
+					clearReconnectTimer();
 					reconnectAttempt = 0;
 					isReconnecting = true;
 					attemptReconnect();
@@ -190,6 +217,7 @@
 			if (destroyed) return;
 			// Network came back — reset attempts and reconnect
 			if (connectionStatus !== 'connected') {
+				clearReconnectTimer();
 				reconnectAttempt = 0;
 				isReconnecting = true;
 				attemptReconnect();
