@@ -73,7 +73,7 @@
 
 		const signalingUrls = import.meta.env.DEV
 			? [`ws://${window.location.hostname}:4444`]
-			: ['wss://syncingsh-signaling.onrender.com', 'wss://y-webrtc-signaling.onrender.com'];
+			: ['wss://signal.justn.me'];
 
 		let provider: WebrtcProvider | null = null;
 		let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
