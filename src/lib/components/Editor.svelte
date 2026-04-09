@@ -37,21 +37,51 @@
 						event.preventDefault();
 						const { state, dispatch } = view;
 						const { selection } = state;
-						const from = selection.$from;
+						const { from, to, empty } = selection;
+						const $from = selection.$from;
 
 						// In code blocks, insert a tab character; elsewhere use 2 spaces
-						const isCodeBlock = from.parent.type.name === 'codeBlock';
+						const isCodeBlock = $from.parent.type.name === 'codeBlock';
 						const indent = isCodeBlock ? '\t' : '  ';
 
 						if (event.shiftKey) {
 							// Outdent: remove leading indent from the current line
-							const lineStart = from.start();
-							const lineText = from.parent.textContent;
+							const parentText = $from.parent.textContent;
+							const lineOffset = parentText.lastIndexOf('\n', $from.parentOffset - 1) + 1;
+							const lineStart = $from.start() + lineOffset;
+							const lineText = parentText.slice(lineOffset);
 							const leadingChars = lineText.match(/^(\t| {2})/);
 							if (leadingChars) {
 								const removeLength = leadingChars[0].length;
 								dispatch(state.tr.delete(lineStart, lineStart + removeLength));
 							}
+						} else if (!empty) {
+							// Indent each line covered by the selection
+							const $to = selection.$to;
+							const blockStart = $from.start();
+							const blockText = $from.parent.textContent;
+
+							// Collect the document positions of each line start within the selection
+							const lineStarts: number[] = [];
+							// Always include the line that contains `from`
+							const firstLineOffset = blockText.lastIndexOf('\n', $from.parentOffset - 1) + 1;
+							lineStarts.push(blockStart + firstLineOffset);
+
+							// Walk through newlines between from and to that are in the same block
+							let searchFrom = firstLineOffset;
+							while (true) {
+								const nextNl = blockText.indexOf('\n', searchFrom);
+								if (nextNl === -1 || blockStart + nextNl >= to) break;
+								lineStarts.push(blockStart + nextNl + 1);
+								searchFrom = nextNl + 1;
+							}
+
+							// Insert indents from back to front so positions stay valid
+							let tr = state.tr;
+							for (let i = lineStarts.length - 1; i >= 0; i--) {
+								tr = tr.insertText(indent, lineStarts[i]);
+							}
+							dispatch(tr);
 						} else {
 							// Indent: insert at cursor position
 							dispatch(state.tr.insertText(indent));
