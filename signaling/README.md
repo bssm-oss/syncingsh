@@ -62,26 +62,39 @@ JSON over WebSocket. y-webrtc 클라이언트가 보내는 메시지 타입:
 
 서버는 30초마다 비활성 연결을 정리합니다.
 
-## 배포
+## Docker 배포
 
-Render.com free tier에 배포 중 (`render.yaml` 참고).
+```bash
+cd signaling
+
+# 빌드 + 실행
+docker compose up -d
+
+# 로그 확인
+docker compose logs -f
+
+# 중지
+docker compose down
+```
+
+포트나 환경변수를 바꾸려면 `docker-compose.yml` 수정:
 
 ```yaml
-# render.yaml
 services:
-  - type: web
-    name: syncingsh-signaling
-    runtime: node
-    rootDir: signaling
-    buildCommand: npm install && npm run build
-    startCommand: npm start
-    envVars:
-      - key: PORT
-        value: 10000
+  signaling:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "4444:4444"       # 호스트:컨테이너
+    environment:
+      - PORT=4444
 ```
+
+리버스 프록시(nginx/caddy) 뒤에서 SSL 붙이면 `wss://` 사용 가능.
 
 ## 기술 스택
 
 - [Hono](https://hono.dev) + [@hono/node-ws](https://github.com/honojs/middleware/tree/main/packages/node-ws)
 - TypeScript strict
 - Node.js 20+
+- Docker (multi-stage build, ~50MB 이미지)
