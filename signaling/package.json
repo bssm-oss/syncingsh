@@ -1,13 +1,13 @@
 {
-  "name": "syncingsh-signaling",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "lib0": "^0.2.117",
-    "ws": "^8.19.0"
-  }
+	"name": "syncingsh-signaling",
+	"private": true,
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"start": "node server.js"
+	},
+	"dependencies": {
+		"lib0": "^0.2.117",
+		"ws": "^8.19.0"
+	}
 }

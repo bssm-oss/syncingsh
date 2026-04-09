@@ -48,7 +48,7 @@
 						type="text"
 						bind:value={customCode}
 						placeholder="원하는 방 코드 입력 (예: godfield)"
-						class="w-full rounded-lg border border-gray-300 px-4 py-3 text-center text-lg tracking-widest placeholder:text-sm placeholder:tracking-normal focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+						class="w-full rounded-lg border border-gray-300 px-4 py-3 text-center text-lg tracking-widest placeholder:text-sm placeholder:tracking-normal focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none"
 					/>
 					<p class="text-center text-xs text-gray-400">
 						영문 소문자, 숫자만 사용 가능 (2~20자) · 비우면 랜덤 생성
@@ -91,7 +91,7 @@
 				type="text"
 				bind:value={joinCode}
 				placeholder="방 코드 입력"
-				class="w-full rounded-lg border border-gray-300 px-4 py-3 text-center text-lg tracking-widest placeholder:text-sm placeholder:tracking-normal focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+				class="w-full rounded-lg border border-gray-300 px-4 py-3 text-center text-lg tracking-widest placeholder:text-sm placeholder:tracking-normal focus:border-gray-900 focus:ring-1 focus:ring-gray-900 focus:outline-none"
 			/>
 			{#if error}
 				<p class="text-center text-sm text-red-500">{error}</p>
