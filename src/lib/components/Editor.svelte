@@ -38,7 +38,7 @@
 						const { state, dispatch } = view;
 						const { selection } = state;
 						const { to, empty } = selection;
-						const resolvedFrom = selection.resolvedFrom;
+						const resolvedFrom = selection.$from;
 
 						// In code blocks, insert a tab character; elsewhere use 2 spaces
 						const isCodeBlock = resolvedFrom.parent.type.name === 'codeBlock';
@@ -63,7 +63,8 @@
 							// Collect the document positions of each line start within the selection
 							const lineStarts: number[] = [];
 							// Always include the line that contains `from`
-							const firstLineOffset = blockText.lastIndexOf('\n', resolvedFrom.parentOffset - 1) + 1;
+							const firstLineOffset =
+								blockText.lastIndexOf('\n', resolvedFrom.parentOffset - 1) + 1;
 							lineStarts.push(blockStart + firstLineOffset);
 
 							// Walk through newlines between from and to that are in the same block
