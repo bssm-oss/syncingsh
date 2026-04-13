@@ -2,13 +2,13 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import * as Y from 'yjs';
-	import { WebrtcProvider } from 'y-webrtc';
+	import { createClient } from '@liveblocks/client';
+	import { LiveblocksYjsProvider } from '@liveblocks/yjs';
 	import Editor from '$lib/components/Editor.svelte';
 	import TabBar from '$lib/components/TabBar.svelte';
 	import Presence from '$lib/components/Presence.svelte';
 	import { getNickname, setNickname, getUserColor } from '$lib/utils/nickname';
 	import type { ConnectionStatus } from '$lib/types/yjs';
-	import type { Awareness } from 'y-protocols/awareness';
 
 	interface TabMeta {
 		id: string;
@@ -19,7 +19,7 @@
 	const roomId = $derived($page.params.roomId);
 
 	let ydoc = $state<Y.Doc | null>(null);
-	let awareness = $state<Awareness | null>(null);
+	let awareness = $state<InstanceType<typeof LiveblocksYjsProvider>['awareness'] | null>(null);
 	let connectionStatus = $state<ConnectionStatus>('disconnected');
 	let nickname = $state('');
 	let editingName = $state(false);
@@ -55,7 +55,6 @@
 		}
 		tabs = arr;
 
-		// If active tab was removed, switch to the first available
 		if (tabs.length > 0 && !tabs.find((t) => t.id === activeTabId)) {
 			activeTabId = tabs[0].id;
 		}
@@ -77,7 +76,6 @@
 		if (!ydoc || !yTabs) return;
 		if (tabs.length <= 1) return;
 
-		// Check if the tab's fragment has content
 		const fragment = ydoc.getXmlFragment(`tab-${tabId}`);
 		const hasContent = fragment.length > 0;
 
@@ -88,7 +86,6 @@
 		const index = tabs.findIndex((t) => t.id === tabId);
 		if (index === -1) return;
 
-		// Switch to adjacent tab before removing
 		if (activeTabId === tabId) {
 			const nextIndex = index > 0 ? index - 1 : 1;
 			activeTabId = tabs[nextIndex].id;
@@ -96,7 +93,6 @@
 
 		yTabs.delete(index, 1);
 
-		// Clean up the fragment data
 		ydoc.transact(() => {
 			const frag = ydoc!.getXmlFragment(`tab-${tabId}`);
 			frag.delete(0, frag.length);
@@ -137,52 +133,30 @@
 		const userColor = getUserColor();
 		const doc = new Y.Doc();
 
-		const signalingUrls = import.meta.env.DEV
-			? [`ws://${window.location.hostname}:4444`]
-			: ['wss://signal.justn.me'];
+		const client = createClient({
+			publicApiKey: import.meta.env.VITE_LIVEBLOCKS_PUBLIC_KEY
+		});
 
-		let webrtcProvider: WebrtcProvider;
+		const { room, leave } = client.enterRoom(roomId);
+		const provider = new LiveblocksYjsProvider(room, doc);
 
-		const startProvider = (iceServers?: RTCIceServer[]) => {
-			webrtcProvider = new WebrtcProvider(roomId, doc, {
-				signaling: signalingUrls,
-				...(iceServers && { peerOpts: { config: { iceServers } } }),
-				maxConns: 20,
-				filterBcConns: false
-			});
+		room.subscribe('status', (status) => {
+			if (status === 'connected') connectionStatus = 'connected';
+			else if (status === 'connecting' || status === 'reconnecting') connectionStatus = 'connecting';
+			else if (status === 'disconnected') connectionStatus = 'disconnected';
+		});
 
-			webrtcProvider.on('synced', () => {
-				connectionStatus = 'connected';
-			});
+		provider.awareness.setLocalStateField('user', {
+			name: nickname,
+			color: userColor
+		});
 
-			webrtcProvider.on('status', (event: { connected: boolean }) => {
-				connectionStatus = event.connected ? 'connected' : 'connecting';
-			});
+		ydoc = doc;
+		awareness = provider.awareness;
+		connectionStatus = 'connecting';
 
-			webrtcProvider.awareness.setLocalStateField('user', {
-				name: nickname,
-				color: userColor
-			});
-
-			ydoc = doc;
-			awareness = webrtcProvider.awareness;
-			connectionStatus = 'connecting';
-		};
-
-		const meteredApiKey = import.meta.env.VITE_METERED_API_KEY;
-		if (meteredApiKey) {
-			fetch(`https://syncingsh.metered.live/api/v1/turn/credentials?apiKey=${meteredApiKey}`)
-				.then((res) => res.json())
-				.then((servers: RTCIceServer[]) => startProvider(servers))
-				.catch(() => startProvider());
-		} else {
-			startProvider();
-		}
-
-		// Initialize tabs from Yjs
 		yTabs = doc.getArray<TabMeta>('tabs');
 
-		// If no tabs exist, create the default one
 		if (yTabs.length === 0) {
 			const defaultId = generateTabId();
 			yTabs.push([
@@ -204,8 +178,8 @@
 		});
 
 		return () => {
-			webrtcProvider?.disconnect();
-			webrtcProvider?.destroy();
+			provider.destroy();
+			leave();
 			doc.destroy();
 		};
 	});

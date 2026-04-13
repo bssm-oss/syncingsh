@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { Awareness } from 'y-protocols/awareness';
+
+	interface AwarenessLike {
+		getStates(): Map<number, unknown>;
+		on(event: string, cb: () => void): void;
+		off(event: string, cb: () => void): void;
+		clientID?: number;
+		doc?: { clientID: number };
+	}
 
 	interface Props {
-		awareness: Awareness;
+		awareness: AwarenessLike;
 	}
 
 	let { awareness }: Props = $props();
@@ -18,12 +25,12 @@
 	onMount(() => {
 		const update = () => {
 			const states = awareness.getStates();
-			const localId = awareness.clientID;
+			const localId = awareness.clientID ?? awareness.doc?.clientID;
 			const result: User[] = [];
 
 			states.forEach((state, clientId) => {
-				if (clientId !== localId && state.user) {
-					result.push(state.user);
+				if (clientId !== localId && state !== null && typeof state === 'object' && 'user' in state && state.user) {
+					result.push(state.user as User);
 				}
 			});
 
