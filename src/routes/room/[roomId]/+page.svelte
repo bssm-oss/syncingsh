@@ -140,11 +140,14 @@
 		const { room, leave } = client.enterRoom(roomId);
 		const provider = new LiveblocksYjsProvider(room, doc);
 
-		room.subscribe('status', (status) => {
+		const mapStatus = (status: string) => {
 			if (status === 'connected') connectionStatus = 'connected';
 			else if (status === 'connecting' || status === 'reconnecting') connectionStatus = 'connecting';
 			else if (status === 'disconnected') connectionStatus = 'disconnected';
-		});
+		};
+
+		mapStatus(room.getStatus());
+		room.subscribe('status', mapStatus);
 
 		provider.awareness.setLocalStateField('user', {
 			name: nickname,

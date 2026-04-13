@@ -12,7 +12,7 @@
 	let { fragment }: Props = $props();
 
 	let element: HTMLDivElement | undefined = $state();
-	let editor: Editor | undefined = $state();
+	let editor: Editor | undefined;
 
 	function createEditor(el: HTMLDivElement, frag: Y.XmlFragment) {
 		return new Editor({
