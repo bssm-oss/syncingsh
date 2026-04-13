@@ -49,9 +49,14 @@
 
 	function syncTabsFromYjs() {
 		if (!yTabs) return;
+		const seen = new Set<string>();
 		const arr: TabMeta[] = [];
 		for (let i = 0; i < yTabs.length; i++) {
-			arr.push(yTabs.get(i));
+			const t = yTabs.get(i);
+			if (!seen.has(t.id)) {
+				seen.add(t.id);
+				arr.push(t);
+			}
 		}
 		tabs = arr;
 
@@ -162,13 +167,14 @@
 
 		const initTabs = () => {
 			if (!yTabs) return;
-			if (yTabs.length === 0) {
-				const defaultId = generateTabId();
-				yTabs.push([{ id: defaultId, name: '문서 1', createdAt: Date.now() }]);
-				activeTabId = defaultId;
-			} else {
-				activeTabId = yTabs.get(0).id;
+			const DEFAULT_TAB_ID = 'default';
+			const hasDefault = Array.from({ length: yTabs.length }, (_, i) => yTabs!.get(i)).some(
+				(t) => t.id === DEFAULT_TAB_ID
+			);
+			if (!hasDefault) {
+				yTabs.push([{ id: DEFAULT_TAB_ID, name: '문서 1', createdAt: Date.now() }]);
 			}
+			activeTabId = DEFAULT_TAB_ID;
 			syncTabsFromYjs();
 			yTabs.observe(() => syncTabsFromYjs());
 		};
