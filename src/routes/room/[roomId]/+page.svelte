@@ -160,25 +160,30 @@
 
 		yTabs = doc.getArray<TabMeta>('tabs');
 
-		if (yTabs.length === 0) {
-			const defaultId = generateTabId();
-			yTabs.push([
-				{
-					id: defaultId,
-					name: '문서 1',
-					createdAt: Date.now()
-				}
-			]);
-			activeTabId = defaultId;
-		} else {
-			activeTabId = yTabs.get(0).id;
-		}
-
-		syncTabsFromYjs();
-
-		yTabs.observe(() => {
+		const initTabs = () => {
+			if (!yTabs) return;
+			if (yTabs.length === 0) {
+				const defaultId = generateTabId();
+				yTabs.push([{ id: defaultId, name: '문서 1', createdAt: Date.now() }]);
+				activeTabId = defaultId;
+			} else {
+				activeTabId = yTabs.get(0).id;
+			}
 			syncTabsFromYjs();
-		});
+			yTabs.observe(() => syncTabsFromYjs());
+		};
+
+		if (provider.getStatus() === 'synchronized') {
+			initTabs();
+		} else {
+			const onProviderStatus = (status: string) => {
+				if (status === 'synchronized') {
+					provider.off('status', onProviderStatus);
+					initTabs();
+				}
+			};
+			provider.on('status', onProviderStatus);
+		}
 
 		return () => {
 			provider.destroy();
