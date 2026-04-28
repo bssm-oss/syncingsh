@@ -50,7 +50,7 @@
 	});
 </script>
 
-<div class="editor-wrapper">
+<div class="editor-wrapper px-2 sm:px-0">
 	<div bind:this={element}></div>
 </div>
 

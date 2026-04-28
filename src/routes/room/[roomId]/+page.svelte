@@ -24,6 +24,8 @@
 	let nickname = $state('');
 	let editingName = $state(false);
 	let errorMessage = $state<string | null>(null);
+	let copyFeedback = $state('');
+	let copyTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	let tabs = $state<TabMeta[]>([]);
 	let activeTabId = $state<string>('');
@@ -117,6 +119,19 @@
 
 	function switchTab(tabId: string) {
 		activeTabId = tabId;
+	}
+
+	async function copyRoomLink() {
+		try {
+			if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+			await navigator.clipboard.writeText(window.location.href);
+			copyFeedback = '링크를 복사했습니다';
+		} catch {
+			copyFeedback = '주소창의 링크를 복사해 공유하세요';
+		}
+
+		if (copyTimeout) clearTimeout(copyTimeout);
+		copyTimeout = setTimeout(() => (copyFeedback = ''), 5000);
 	}
 
 	function storageKey() {
@@ -288,7 +303,7 @@
 </script>
 
 <div class="mx-auto max-w-4xl px-4 py-6">
-	<header class="mb-4 flex items-center justify-between">
+	<header class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 		<div>
 			<h1 class="text-lg font-semibold text-gray-900">Room: {roomId}</h1>
 			<div class="mt-1 flex items-center gap-2">
@@ -323,7 +338,17 @@
 				></span>
 			</div>
 		</div>
-		<div class="flex items-center gap-3">
+		<div class="flex flex-wrap items-center gap-2 sm:justify-end">
+			<button
+				onclick={copyRoomLink}
+				title="방 링크 복사"
+				class="rounded border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-200"
+			>
+				링크 복사
+			</button>
+			{#if copyFeedback}
+				<span class="text-xs text-green-600" aria-live="polite">{copyFeedback}</span>
+			{/if}
 			{#if awareness}
 				<Presence {awareness} />
 			{/if}
@@ -332,7 +357,8 @@
 
 	{#if errorMessage}
 		<div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-			{errorMessage}
+			<p>{errorMessage}</p>
+			<p class="mt-1 text-xs">같은 브라우저 탭끼리는 계속 동기화되고, 새로고침해도 복구됩니다.</p>
 		</div>
 	{/if}
 
@@ -351,7 +377,18 @@
 				<Editor fragment={activeFragment} />
 			{/key}
 		{/if}
+	{:else if connectionStatus === 'connecting'}
+		<div class="flex h-64 items-center justify-center text-gray-400">서버에 연결 중입니다...</div>
+	{:else if connectionStatus === 'disconnected'}
+		<div class="flex h-64 items-center justify-center text-red-400">
+			연결이 끊어졌습니다. 새로고침 해보세요.
+		</div>
+	{:else if connectionStatus === 'error'}
+		<div class="flex h-64 items-center justify-center text-amber-600">
+			로컬 모드로 실행 중입니다. 이 브라우저에서만 편집 내용이 저장되며, 서버에는 아무 데이터도 남지
+			않습니다.
+		</div>
 	{:else}
-		<div class="flex h-64 items-center justify-center text-gray-400">연결 중...</div>
+		<div class="flex h-64 items-center justify-center text-gray-400">문서를 불러오는 중...</div>
 	{/if}
 </div>
