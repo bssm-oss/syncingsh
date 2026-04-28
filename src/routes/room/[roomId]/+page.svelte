@@ -17,6 +17,7 @@
 	}
 
 	const roomId = $derived($page.params.roomId);
+	const isReadonly = $derived($page.url.searchParams.get('readonly') === '1');
 
 	let ydoc = $state<Y.Doc | null>(null);
 	let awareness = $state<any | null>(null);
@@ -128,6 +129,22 @@
 			copyFeedback = '링크를 복사했습니다';
 		} catch {
 			copyFeedback = '주소창의 링크를 복사해 공유하세요';
+		}
+
+		if (copyTimeout) clearTimeout(copyTimeout);
+		copyTimeout = setTimeout(() => (copyFeedback = ''), 5000);
+	}
+
+	async function copyReadonlyLink() {
+		const url = new URL(window.location.href);
+		url.searchParams.set('readonly', '1');
+
+		try {
+			if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+			await navigator.clipboard.writeText(url.toString());
+			copyFeedback = '읽기 전용 링크를 복사했습니다';
+		} catch {
+			copyFeedback = '주소에 ?readonly=1을 붙여 공유하세요';
 		}
 
 		if (copyTimeout) clearTimeout(copyTimeout);
@@ -379,6 +396,13 @@
 			>
 				링크 복사
 			</button>
+			<button
+				onclick={copyReadonlyLink}
+				title="읽기 전용 방 링크 복사"
+				class="rounded border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-200"
+			>
+				읽기 전용 링크
+			</button>
 			{#if copyFeedback}
 				<span class="text-xs text-green-600" aria-live="polite">{copyFeedback}</span>
 			{/if}
@@ -395,6 +419,12 @@
 		</div>
 	{/if}
 
+	{#if isReadonly}
+		<div class="mb-4 rounded border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+			읽기 전용 모드입니다. 문서를 볼 수 있지만 편집할 수 없습니다.
+		</div>
+	{/if}
+
 	{#if ydoc && tabs.length > 0}
 		<TabBar
 			{tabs}
@@ -407,7 +437,7 @@
 
 		{#if activeFragment}
 			{#key activeTabId}
-				<Editor fragment={activeFragment} />
+				<Editor fragment={activeFragment} editable={!isReadonly} />
 			{/key}
 		{/if}
 	{:else if connectionStatus === 'connecting'}

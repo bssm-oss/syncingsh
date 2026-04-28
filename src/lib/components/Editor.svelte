@@ -7,16 +7,18 @@
 
 	interface Props {
 		fragment: Y.XmlFragment;
+		editable?: boolean;
 	}
 
-	let { fragment }: Props = $props();
+	let { fragment, editable = true }: Props = $props();
 
 	let element: HTMLDivElement | undefined = $state();
 	let editor: Editor | undefined;
 
-	function createEditor(el: HTMLDivElement, frag: Y.XmlFragment) {
+	function createEditor(el: HTMLDivElement, frag: Y.XmlFragment, canEdit: boolean) {
 		return new Editor({
 			element: el,
+			editable: canEdit,
 			extensions: [
 				StarterKit.configure({
 					undoRedo: false
@@ -41,7 +43,7 @@
 		const frag = fragment;
 
 		editor?.destroy();
-		editor = createEditor(element, frag);
+		editor = createEditor(element, frag, editable);
 
 		return () => {
 			editor?.destroy();
