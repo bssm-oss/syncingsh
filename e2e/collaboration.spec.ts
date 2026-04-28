@@ -65,6 +65,22 @@ test.describe('Room page', () => {
 		await expect(editor).toContainText('Hello syncingsh!');
 	});
 
+	test('should apply Markdown input shortcuts', async ({ page }) => {
+		await page.goto('/room/e2e-test-markdown-shortcuts');
+
+		const editor = page.locator('.tiptap');
+		await editor.waitFor({ timeout: 10000 });
+
+		await editor.click();
+		await page.keyboard.type('# Heading');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('- Item');
+		await page.keyboard.press('Enter');
+
+		await expect(editor.locator('h1')).toContainText('Heading');
+		await expect(editor.locator('ul li').filter({ hasText: 'Item' })).toBeVisible();
+	});
+
 	test('should show share link feedback', async ({ page }) => {
 		await page.addInitScript(() => {
 			Object.defineProperty(navigator, 'clipboard', {
