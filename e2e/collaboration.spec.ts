@@ -109,6 +109,21 @@ test.describe('Room page', () => {
 		await expect(editor).not.toContainText('Should not appear');
 	});
 
+	test('should export current document as text', async ({ page }) => {
+		await page.goto('/room/e2e-export');
+
+		const editor = page.locator('.tiptap');
+		await editor.waitFor({ timeout: 10000 });
+		await editor.click();
+		await page.keyboard.type('Exported content');
+
+		const downloadPromise = page.waitForEvent('download');
+		await page.getByRole('button', { name: '내보내기' }).click();
+		const download = await downloadPromise;
+
+		expect(download.suggestedFilename()).toBe('문서 1.txt');
+	});
+
 	test('should show degraded local recovery mode without Liveblocks key', async ({ page }) => {
 		test.skip(
 			!!process.env.VITE_LIVEBLOCKS_PUBLIC_KEY,

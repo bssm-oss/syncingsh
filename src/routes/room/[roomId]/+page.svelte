@@ -151,6 +151,18 @@
 		copyTimeout = setTimeout(() => (copyFeedback = ''), 5000);
 	}
 
+	function exportCurrentTab() {
+		const activeTab = tabs.find((tab) => tab.id === activeTabId);
+		const text = document.querySelector('.tiptap')?.textContent?.trim() ?? '';
+		const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `${activeTab?.name ?? roomId}.txt`;
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
 	function storageKey() {
 		return `syncingsh_room_${roomId}`;
 	}
@@ -402,6 +414,13 @@
 				class="rounded border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-200"
 			>
 				읽기 전용 링크
+			</button>
+			<button
+				onclick={exportCurrentTab}
+				title="현재 문서 내보내기"
+				class="rounded border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-200"
+			>
+				내보내기
 			</button>
 			{#if copyFeedback}
 				<span class="text-xs text-green-600" aria-live="polite">{copyFeedback}</span>
