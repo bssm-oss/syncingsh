@@ -25,7 +25,7 @@ test.describe('Landing page', () => {
 		await page.goto('/');
 		await page.waitForLoadState('networkidle');
 
-		await page.getByPlaceholder('방 코드 입력').fill('ab');
+		await page.getByPlaceholder('방 코드 입력').fill('a');
 		await page.getByRole('button', { name: '참여하기' }).click();
 
 		await expect(page.getByText('올바른 방 코드를 입력해주세요')).toBeVisible();
@@ -66,7 +66,7 @@ test.describe('Room page', () => {
 	});
 });
 
-test.describe('Real-time collaboration', () => {
+test.describe('Real-time collaboration (same-browser fallback)', () => {
 	test('two tabs should sync content via BroadcastChannel', async ({ context }) => {
 		const roomPath = '/room/e2e-sync-test';
 
@@ -91,6 +91,11 @@ test.describe('Real-time collaboration', () => {
 	});
 
 	test('presence should update when peer connects', async ({ context }) => {
+		test.skip(
+			!process.env.VITE_LIVEBLOCKS_PUBLIC_KEY,
+			'Liveblocks public key is required for presence tests'
+		);
+
 		const roomPath = '/room/e2e-presence-test';
 
 		const page1 = await context.newPage();
@@ -110,9 +115,13 @@ test.describe('Real-time collaboration', () => {
 	});
 });
 
-test.describe('WebRTC signaling sync', () => {
+test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 	let context1: BrowserContext;
 	let context2: BrowserContext;
+
+	if (!process.env.VITE_LIVEBLOCKS_PUBLIC_KEY) {
+		test.skip(true, 'VITE_LIVEBLOCKS_PUBLIC_KEY is required for Liveblocks sync tests');
+	}
 
 	test.beforeEach(async ({ browser }) => {
 		// Separate browser contexts = separate browsers (no BroadcastChannel)
@@ -125,8 +134,8 @@ test.describe('WebRTC signaling sync', () => {
 		await context2.close();
 	});
 
-	test('two separate browsers should sync via WebRTC signaling server', async () => {
-		const roomPath = '/room/e2e-webrtc-sync';
+	test('two separate browsers should sync via Liveblocks WebSocket', async () => {
+		const roomPath = '/room/e2e-liveblocks-sync';
 
 		const page1 = await context1.newPage();
 		const page2 = await context2.newPage();
@@ -139,19 +148,19 @@ test.describe('WebRTC signaling sync', () => {
 		await editor1.waitFor({ timeout: 10000 });
 		await editor2.waitFor({ timeout: 10000 });
 
-		// Wait for WebRTC connection to establish
+		// Wait for Liveblocks connection to establish
 		await page1.waitForTimeout(2000);
 
 		// Type in page1
 		await editor1.click();
-		await page1.keyboard.type('WebRTC sync works!');
+		await page1.keyboard.type('Liveblocks sync works!');
 
-		// Verify it appears in page2 via signaling server
-		await expect(editor2).toContainText('WebRTC sync works!', { timeout: 15000 });
+		// Verify it appears in page2 via Liveblocks
+		await expect(editor2).toContainText('Liveblocks sync works!', { timeout: 15000 });
 	});
 
 	test('presence should work across separate browsers', async () => {
-		const roomPath = '/room/e2e-webrtc-presence';
+		const roomPath = '/room/e2e-liveblocks-presence';
 
 		const page1 = await context1.newPage();
 		await page1.goto(roomPath);
@@ -165,7 +174,26 @@ test.describe('WebRTC signaling sync', () => {
 		await page2.goto(roomPath);
 		await page2.locator('.tiptap').waitFor({ timeout: 10000 });
 
-		// Presence should update via signaling
+		// Presence should update via Liveblocks
 		await expect(page1.getByText(/1명/)).toBeVisible({ timeout: 15000 });
+	});
+});
+
+test.describe('Local reload recovery', () => {
+	test('should restore room content after reload', async ({ page }) => {
+		const roomPath = `/room/e2e-reload-${Date.now()}`;
+
+		await page.goto(roomPath);
+		const editor = page.locator('.tiptap');
+		await editor.waitFor({ timeout: 10000 });
+
+		await editor.click();
+		await page.keyboard.type('Recovered after reload');
+		await expect(editor).toContainText('Recovered after reload');
+
+		await page.reload();
+		await expect(page.locator('.tiptap')).toContainText('Recovered after reload', {
+			timeout: 10000
+		});
 	});
 });
