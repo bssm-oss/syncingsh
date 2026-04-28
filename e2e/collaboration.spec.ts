@@ -53,6 +53,12 @@ test.describe('Room page', () => {
 		await expect(input).toBeVisible();
 	});
 
+	test('should show solo presence state', async ({ page }) => {
+		await page.goto('/room/e2e-solo-presence');
+
+		await expect(page.getByText('나만 접속 중')).toBeVisible({ timeout: 10000 });
+	});
+
 	test('should allow typing in the editor', async ({ page }) => {
 		await page.goto('/room/e2e-test-typing');
 

@@ -427,6 +427,8 @@
 			{/if}
 			{#if awareness}
 				<Presence {awareness} />
+			{:else}
+				<span class="text-xs text-gray-400">나만 접속 중</span>
 			{/if}
 		</div>
 	</header>
