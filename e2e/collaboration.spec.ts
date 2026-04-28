@@ -79,6 +79,19 @@ test.describe('Room page', () => {
 
 		await expect(page.getByText('링크를 복사했습니다')).toBeVisible();
 	});
+
+	test('should show degraded local recovery mode without Liveblocks key', async ({ page }) => {
+		test.skip(
+			!!process.env.VITE_LIVEBLOCKS_PUBLIC_KEY,
+			'Only applies when Liveblocks key is absent'
+		);
+
+		await page.goto('/room/e2e-degraded-mode');
+
+		await expect(page.locator('.tiptap')).toBeVisible({ timeout: 10000 });
+		await expect(page.getByText('Liveblocks 공개 키가 없어')).toBeVisible();
+		await expect(page.getByText('새로고침해도 복구됩니다')).toBeVisible();
+	});
 });
 
 test.describe('Real-time collaboration (same-browser fallback)', () => {

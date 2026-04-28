@@ -154,21 +154,42 @@
 			const stored = localStorage.getItem(storageKey());
 			if (stored) Y.applyUpdate(doc, base64ToUpdate(stored));
 		} catch {
-			localStorage.removeItem(storageKey());
+			try {
+				localStorage.removeItem(storageKey());
+			} catch {
+				// Storage can be unavailable in private or restricted browser contexts.
+			}
 		}
 	}
 
 	function persistLocalDoc(doc: Y.Doc) {
-		localStorage.setItem(storageKey(), updateToBase64(Y.encodeStateAsUpdate(doc)));
+		try {
+			localStorage.setItem(storageKey(), updateToBase64(Y.encodeStateAsUpdate(doc)));
+		} catch {
+			// Keep editing even when local persistence is unavailable.
+		}
+	}
+
+	function fallbackOrigin() {
+		return crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
 	}
 
 	function connectLocalFallback(doc: Y.Doc) {
+		if (typeof BroadcastChannel === 'undefined') {
+			doc.on('update', () => persistLocalDoc(doc));
+			return () => {};
+		}
+
 		const channel = new BroadcastChannel(`syncingsh:${roomId}`);
-		const origin = crypto.randomUUID();
+		const origin = fallbackOrigin();
 
 		const onUpdate = (update: Uint8Array) => {
 			persistLocalDoc(doc);
-			channel.postMessage({ origin, update: updateToBase64(update) });
+			try {
+				channel.postMessage({ origin, update: updateToBase64(update) });
+			} catch {
+				// Local persistence still protects reload recovery if cross-tab broadcast fails.
+			}
 		};
 
 		channel.onmessage = (event) => {
@@ -176,18 +197,30 @@
 			if (message.origin === origin) return;
 
 			if (message.requestSync) {
-				channel.postMessage({ origin, update: updateToBase64(Y.encodeStateAsUpdate(doc)) });
+				try {
+					channel.postMessage({ origin, update: updateToBase64(Y.encodeStateAsUpdate(doc)) });
+				} catch {
+					// Ignore failed sync responses; the local document remains editable.
+				}
 				return;
 			}
 
 			if (message.update) {
-				Y.applyUpdate(doc, base64ToUpdate(message.update), 'remote');
-				persistLocalDoc(doc);
+				try {
+					Y.applyUpdate(doc, base64ToUpdate(message.update), 'remote');
+					persistLocalDoc(doc);
+				} catch {
+					// Ignore malformed peer updates.
+				}
 			}
 		};
 
 		doc.on('update', onUpdate);
-		channel.postMessage({ origin, requestSync: true });
+		try {
+			channel.postMessage({ origin, requestSync: true });
+		} catch {
+			// Broadcast sync is best-effort.
+		}
 
 		return () => {
 			doc.off('update', onUpdate);
