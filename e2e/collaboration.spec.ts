@@ -64,6 +64,21 @@ test.describe('Room page', () => {
 
 		await expect(editor).toContainText('Hello syncingsh!');
 	});
+
+	test('should show share link feedback', async ({ page }) => {
+		await page.addInitScript(() => {
+			Object.defineProperty(navigator, 'clipboard', {
+				value: { writeText: async () => undefined },
+				configurable: true
+			});
+		});
+		await page.goto('/room/e2e-test-share');
+		await page.locator('.tiptap').waitFor({ timeout: 10000 });
+
+		await page.getByRole('button', { name: '링크 복사' }).click();
+
+		await expect(page.getByText('링크를 복사했습니다')).toBeVisible();
+	});
 });
 
 test.describe('Real-time collaboration (same-browser fallback)', () => {
