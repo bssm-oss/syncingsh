@@ -29,7 +29,13 @@
 			const result: User[] = [];
 
 			states.forEach((state, clientId) => {
-				if (clientId !== localId && state !== null && typeof state === 'object' && 'user' in state && state.user) {
+				if (
+					clientId !== localId &&
+					state !== null &&
+					typeof state === 'object' &&
+					'user' in state &&
+					state.user
+				) {
 					result.push(state.user as User);
 				}
 			});
@@ -46,8 +52,8 @@
 	});
 </script>
 
-{#if users.length > 0}
-	<div class="flex items-center gap-1.5">
+<div class="flex items-center gap-1.5">
+	{#if users.length > 0}
 		{#each users as user (user.name)}
 			<span
 				class="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium text-white"
@@ -58,5 +64,7 @@
 			</span>
 		{/each}
 		<span class="ml-1 text-sm text-gray-500">{users.length}명</span>
-	</div>
-{/if}
+	{:else}
+		<span class="text-xs text-gray-400">나만 접속 중</span>
+	{/if}
+</div>
