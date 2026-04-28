@@ -43,6 +43,11 @@
 		<div class="text-center">
 			<h1 class="text-3xl font-bold text-gray-900">syncingsh</h1>
 			<p class="mt-2 text-gray-500">실시간 공유 메모장</p>
+			<div class="mt-4 space-y-1 rounded-lg bg-gray-100 px-4 py-3 text-left text-sm text-gray-700">
+				<p><span class="font-semibold">로그인 없이</span> 바로 시작</p>
+				<p><span class="font-semibold">링크나 방 코드만 공유</span>하면 누구나 참여</p>
+				<p>실시간 서버 키가 없을 때도 이 브라우저에 임시 복구됩니다</p>
+			</div>
 		</div>
 
 		<div class="space-y-2">
