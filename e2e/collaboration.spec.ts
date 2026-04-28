@@ -96,6 +96,19 @@ test.describe('Room page', () => {
 		await expect(page.getByText('링크를 복사했습니다')).toBeVisible();
 	});
 
+	test('should prevent edits in read-only mode', async ({ page }) => {
+		await page.goto('/room/e2e-readonly?readonly=1');
+
+		const editor = page.locator('.tiptap');
+		await editor.waitFor({ timeout: 10000 });
+		await expect(page.getByText('읽기 전용 모드입니다')).toBeVisible();
+
+		await editor.click();
+		await page.keyboard.type('Should not appear');
+
+		await expect(editor).not.toContainText('Should not appear');
+	});
+
 	test('should show degraded local recovery mode without Liveblocks key', async ({ page }) => {
 		test.skip(
 			!!process.env.VITE_LIVEBLOCKS_PUBLIC_KEY,
