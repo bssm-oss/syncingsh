@@ -37,6 +37,8 @@
 				origin: string;
 		  };
 
+	const ENCRYPTED_SNAPSHOT_KEY = 'syncingshEncryptedSnapshot';
+
 	const roomId = $derived($page.params.roomId);
 	const isReadonly = $derived($page.url.searchParams.get('readonly') === '1');
 	const usesEncryptedTransport = $derived($page.url.searchParams.get('transport') === 'encrypted');
@@ -233,6 +235,31 @@
 		);
 	}
 
+	async function restoreEncryptedRoomSnapshot(doc: Y.Doc, encryptionKey: CryptoKey, room: any) {
+		try {
+			const { root } = await room.getStorage();
+			const stored = root.get(ENCRYPTED_SNAPSHOT_KEY);
+			if (typeof stored !== 'string') return;
+
+			const envelope = parseEncryptedEnvelope(stored);
+			if (!envelope) return;
+
+			Y.applyUpdate(doc, await decryptEnvelope(encryptionKey, envelope), 'encrypted-snapshot');
+		} catch {
+			// Snapshot recovery is best-effort; live encrypted relay may still catch up.
+		}
+	}
+
+	async function persistEncryptedRoomSnapshot(doc: Y.Doc, encryptionKey: CryptoKey, room: any) {
+		try {
+			const { root } = await room.getStorage();
+			const envelope = await encryptBytes(encryptionKey, Y.encodeStateAsUpdate(doc));
+			root.set(ENCRYPTED_SNAPSHOT_KEY, serializeEnvelope(envelope));
+		} catch {
+			// Keep editing even when durable encrypted snapshot persistence fails.
+		}
+	}
+
 	function connectLocalFallback(doc: Y.Doc, encryptionKey: CryptoKey) {
 		let pendingPersist = Promise.resolve();
 		const schedulePersist = () => {
@@ -321,6 +348,15 @@
 
 	function connectEncryptedRoomTransport(doc: Y.Doc, encryptionKey: CryptoKey, room: any) {
 		const origin = fallbackOrigin();
+		let pendingSnapshot = Promise.resolve();
+		const scheduleSnapshotPersist = () => {
+			pendingSnapshot = pendingSnapshot.then(() =>
+				persistEncryptedRoomSnapshot(doc, encryptionKey, room)
+			);
+			void pendingSnapshot.catch(() => {
+				// persistEncryptedRoomSnapshot already keeps editing available when storage fails.
+			});
+		};
 
 		const broadcastUpdate = async (update: Uint8Array) => {
 			const envelope = await encryptBytes(encryptionKey, update);
@@ -333,6 +369,7 @@
 
 		const onUpdate = (update: Uint8Array, updateOrigin: unknown) => {
 			if (updateOrigin === 'encrypted-transport') return;
+			scheduleSnapshotPersist();
 			void broadcastUpdate(update).catch(() => {
 				// The encrypted relay is best-effort; local recovery remains available.
 			});
@@ -353,6 +390,7 @@
 					const envelope = event.encryptedUpdate;
 					if (!isEncryptedEnvelope(envelope)) return;
 					Y.applyUpdate(doc, await decryptEnvelope(encryptionKey, envelope), 'encrypted-transport');
+					scheduleSnapshotPersist();
 				} catch {
 					// Ignore updates encrypted for another room key or malformed payloads.
 				}
@@ -360,6 +398,7 @@
 		});
 
 		doc.on('update', onUpdate);
+		scheduleSnapshotPersist();
 		try {
 			room.broadcastEvent({ type: 'syncingsh-sync-request', origin });
 		} catch {
@@ -441,6 +480,14 @@
 			const { room, leave } = client.enterRoom(roomId);
 
 			if (usesEncryptedTransport) {
+				await restoreEncryptedRoomSnapshot(doc, encryptionKey, room);
+				if (disposed) {
+					leave();
+					doc.destroy();
+					return;
+				}
+				syncTabsFromYjs();
+
 				const mapStatus = (status: string) => {
 					if (status === 'connected') connectionStatus = 'connected';
 					else if (status === 'connecting' || status === 'reconnecting')
