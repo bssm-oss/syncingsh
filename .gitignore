@@ -5,6 +5,9 @@ node_modules
 .idea
 .vscode
 
+# Local AI agent state
+.sisyphus/
+
 # Output
 .output
 .vercel

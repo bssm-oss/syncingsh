@@ -8,6 +8,9 @@ bun.lockb
 # CodeAgora
 .ca/
 
+# Local AI agent state
+.sisyphus/
+
 # Build output
 signaling/dist/
 
