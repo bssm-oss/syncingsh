@@ -259,6 +259,27 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 		await expect(editor2).toContainText('Liveblocks sync works!', { timeout: 15000 });
 	});
 
+	test('two separate browsers should sync via encrypted transport prototype', async () => {
+		const roomPath = `/room/e2e-encrypted-transport-${Date.now()}?transport=encrypted`;
+
+		const page1 = await context1.newPage();
+		await page1.goto(roomPath);
+		await page1.locator('.tiptap').waitFor({ timeout: 10000 });
+
+		const page2 = await context2.newPage();
+		await page2.goto(page1.url());
+
+		const editor1 = page1.locator('.tiptap');
+		const editor2 = page2.locator('.tiptap');
+		await editor1.waitFor({ timeout: 10000 });
+		await editor2.waitFor({ timeout: 10000 });
+
+		await editor1.click();
+		await page1.keyboard.type('Encrypted transport sync works!');
+
+		await expect(editor2).toContainText('Encrypted transport sync works!', { timeout: 15000 });
+	});
+
 	test('presence should work across separate browsers', async () => {
 		const roomPath = '/room/e2e-liveblocks-presence';
 

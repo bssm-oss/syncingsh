@@ -26,8 +26,20 @@
 		createdAt: number;
 	}
 
+	type EncryptedTransportEvent =
+		| {
+				type: 'syncingsh-yjs-update';
+				origin: string;
+				encryptedUpdate: unknown;
+		  }
+		| {
+				type: 'syncingsh-sync-request';
+				origin: string;
+		  };
+
 	const roomId = $derived($page.params.roomId);
 	const isReadonly = $derived($page.url.searchParams.get('readonly') === '1');
+	const usesEncryptedTransport = $derived($page.url.searchParams.get('transport') === 'encrypted');
 
 	let ydoc = $state<Y.Doc | null>(null);
 	let awareness = $state<any | null>(null);
@@ -211,6 +223,16 @@
 		return crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
 	}
 
+	function isEncryptedTransportEvent(value: unknown): value is EncryptedTransportEvent {
+		return (
+			!!value &&
+			typeof value === 'object' &&
+			((value as EncryptedTransportEvent).type === 'syncingsh-yjs-update' ||
+				(value as EncryptedTransportEvent).type === 'syncingsh-sync-request') &&
+			typeof (value as EncryptedTransportEvent).origin === 'string'
+		);
+	}
+
 	function connectLocalFallback(doc: Y.Doc, encryptionKey: CryptoKey) {
 		let pendingPersist = Promise.resolve();
 		const schedulePersist = () => {
@@ -297,6 +319,59 @@
 		};
 	}
 
+	function connectEncryptedRoomTransport(doc: Y.Doc, encryptionKey: CryptoKey, room: any) {
+		const origin = fallbackOrigin();
+
+		const broadcastUpdate = async (update: Uint8Array) => {
+			const envelope = await encryptBytes(encryptionKey, update);
+			room.broadcastEvent({
+				type: 'syncingsh-yjs-update',
+				origin,
+				encryptedUpdate: envelope
+			});
+		};
+
+		const onUpdate = (update: Uint8Array, updateOrigin: unknown) => {
+			if (updateOrigin === 'encrypted-transport') return;
+			void broadcastUpdate(update).catch(() => {
+				// The encrypted relay is best-effort; local recovery remains available.
+			});
+		};
+
+		const unsubscribeEvents = room.subscribe('event', ({ event }: { event: unknown }) => {
+			if (!isEncryptedTransportEvent(event) || event.origin === origin) return;
+
+			if (event.type === 'syncingsh-sync-request') {
+				void broadcastUpdate(Y.encodeStateAsUpdate(doc)).catch(() => {
+					// Ignore failed sync responses; peers can keep editing locally.
+				});
+				return;
+			}
+
+			void (async () => {
+				try {
+					const envelope = event.encryptedUpdate;
+					if (!isEncryptedEnvelope(envelope)) return;
+					Y.applyUpdate(doc, await decryptEnvelope(encryptionKey, envelope), 'encrypted-transport');
+				} catch {
+					// Ignore updates encrypted for another room key or malformed payloads.
+				}
+			})();
+		});
+
+		doc.on('update', onUpdate);
+		try {
+			room.broadcastEvent({ type: 'syncingsh-sync-request', origin });
+		} catch {
+			// Late-join catch-up is best-effort in this prototype.
+		}
+
+		return () => {
+			doc.off('update', onUpdate);
+			unsubscribeEvents();
+		};
+	}
+
 	function updateNickname() {
 		const trimmed = nickname.trim();
 		if (!trimmed) return;
@@ -316,6 +391,7 @@
 		let disposed = false;
 		let cleanupLocalFallback = () => {};
 		let cleanupProvider = () => {};
+		let cleanupEncryptedTransport = () => {};
 		let activeDoc: Y.Doc | null = null;
 
 		void (async () => {
@@ -363,6 +439,25 @@
 			});
 
 			const { room, leave } = client.enterRoom(roomId);
+
+			if (usesEncryptedTransport) {
+				const mapStatus = (status: string) => {
+					if (status === 'connected') connectionStatus = 'connected';
+					else if (status === 'connecting' || status === 'reconnecting')
+						connectionStatus = 'connecting';
+					else if (status === 'disconnected') connectionStatus = 'disconnected';
+				};
+
+				mapStatus(room.getStatus());
+				const unsubscribeStatus = room.subscribe('status', mapStatus);
+				cleanupEncryptedTransport = connectEncryptedRoomTransport(doc, encryptionKey, room);
+				cleanupProvider = () => {
+					unsubscribeStatus();
+					leave();
+				};
+				return;
+			}
+
 			const provider = getYjsProviderForRoom(room);
 			const liveblocksDoc = provider.getYDoc();
 			await restoreLocalDoc(liveblocksDoc, encryptionKey);
@@ -416,6 +511,7 @@
 			disposed = true;
 			cleanupProvider();
 			cleanupLocalFallback();
+			cleanupEncryptedTransport();
 			activeDoc?.destroy();
 		};
 	});
