@@ -328,6 +328,7 @@
 			const signedPayload = await signEnvelope(envelope, writeCapability);
 			if (!signedPayload) return;
 			root.set(ENCRYPTED_SNAPSHOT_KEY, JSON.stringify(signedPayload));
+			window.dispatchEvent(new CustomEvent('syncingsh:encrypted-snapshot-persisted'));
 		} catch {
 			// Keep editing even when durable encrypted snapshot persistence fails.
 		}
@@ -431,13 +432,21 @@
 		room: EncryptedRoom
 	) {
 		const origin = fallbackOrigin();
-		let pendingSnapshot = Promise.resolve();
+		let pendingSnapshot: Promise<void> | null = null;
+		let snapshotRequested = false;
 		const scheduleSnapshotPersist = () => {
-			pendingSnapshot = pendingSnapshot.then(() =>
-				persistEncryptedRoomSnapshot(doc, encryptionKey, writeCapability, room)
-			);
-			void pendingSnapshot.catch(() => {
-				// persistEncryptedRoomSnapshot already keeps editing available when storage fails.
+			if (pendingSnapshot) {
+				snapshotRequested = true;
+				return;
+			}
+
+			pendingSnapshot = (async () => {
+				do {
+					snapshotRequested = false;
+					await persistEncryptedRoomSnapshot(doc, encryptionKey, writeCapability, room);
+				} while (snapshotRequested);
+			})().finally(() => {
+				pendingSnapshot = null;
 			});
 		};
 
@@ -742,21 +751,21 @@
 		</div>
 	{/if}
 
-	{#if ydoc && tabs.length > 0}
-		<TabBar
-			{tabs}
-			{activeTabId}
-			onswitch={switchTab}
-			onadd={addTab}
-			onclose={closeTab}
-			onrename={renameTab}
-		/>
-
-		{#if activeFragment}
-			{#key activeTabId}
-				<Editor fragment={activeFragment} editable={!isReadonly} />
-			{/key}
+	{#if ydoc && activeFragment}
+		{#if tabs.length > 0}
+			<TabBar
+				{tabs}
+				{activeTabId}
+				onswitch={switchTab}
+				onadd={addTab}
+				onclose={closeTab}
+				onrename={renameTab}
+			/>
 		{/if}
+
+		{#key activeTabId}
+			<Editor fragment={activeFragment} editable={!isReadonly} />
+		{/key}
 	{:else if connectionStatus === 'connecting'}
 		<div class="flex h-64 items-center justify-center text-gray-400">서버에 연결 중입니다...</div>
 	{:else if connectionStatus === 'disconnected'}

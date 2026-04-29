@@ -9,6 +9,8 @@ declare global {
 	interface Window {
 		__copiedText?: string;
 		__syncingshBroadcastMessages?: BroadcastCaptureMessage[];
+		__syncingshEncryptedSnapshotPersistedAt?: number;
+		__syncingshEncryptedSnapshotPersistedCount?: number;
 	}
 }
 
@@ -323,16 +325,36 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 		const roomPath = `/room/e2e-encrypted-snapshot-${Date.now()}?transport=encrypted`;
 
 		const page1 = await context1.newPage();
+		await page1.addInitScript(() => {
+			window.__syncingshEncryptedSnapshotPersistedAt = 0;
+			window.__syncingshEncryptedSnapshotPersistedCount = 0;
+			window.addEventListener('syncingsh:encrypted-snapshot-persisted', () => {
+				window.__syncingshEncryptedSnapshotPersistedAt = Date.now();
+				window.__syncingshEncryptedSnapshotPersistedCount =
+					(window.__syncingshEncryptedSnapshotPersistedCount ?? 0) + 1;
+			});
+		});
 		await page1.goto(roomPath);
 
 		const editor1 = page1.locator('.tiptap');
 		await editor1.waitFor({ timeout: 10000 });
+		const previousSnapshotCount = await page1.evaluate(
+			() => window.__syncingshEncryptedSnapshotPersistedCount ?? 0
+		);
 		await editor1.click();
 		await page1.keyboard.type('Recovered from encrypted snapshot');
 		await expect(editor1).toContainText('Recovered from encrypted snapshot');
 
 		const sharedUrl = page1.url();
-		await page1.waitForTimeout(1000);
+		await page1.waitForFunction(
+			(snapshotCount) => {
+				const count = window.__syncingshEncryptedSnapshotPersistedCount ?? 0;
+				const persistedAt = window.__syncingshEncryptedSnapshotPersistedAt ?? 0;
+				return count > snapshotCount && Date.now() - persistedAt > 500;
+			},
+			previousSnapshotCount,
+			{ timeout: 15000 }
+		);
 		await context1.close();
 
 		const page2 = await context2.newPage();
