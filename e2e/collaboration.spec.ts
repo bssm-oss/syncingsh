@@ -1,5 +1,17 @@
 import { test, expect, type BrowserContext } from '@playwright/test';
 
+type BroadcastCaptureMessage = {
+	encryptedUpdate?: unknown;
+	update?: unknown;
+};
+
+declare global {
+	interface Window {
+		__copiedText?: string;
+		__syncingshBroadcastMessages?: BroadcastCaptureMessage[];
+	}
+}
+
 test.describe('Landing page', () => {
 	test('should create a new room and navigate to it', async ({ page }) => {
 		await page.goto('/');
@@ -115,6 +127,35 @@ test.describe('Room page', () => {
 		await expect(editor).not.toContainText('Should not appear');
 	});
 
+	test('should omit writer capability from encrypted read-only links', async ({ page }) => {
+		let copiedText = '';
+		await page.addInitScript(() => {
+			Object.defineProperty(navigator, 'clipboard', {
+				value: {
+					writeText: async (value: string) => {
+						window.__copiedText = value;
+					}
+				},
+				configurable: true
+			});
+		});
+
+		await page.goto(`/room/e2e-readonly-capability-${Date.now()}?transport=encrypted`);
+		await page.locator('.tiptap').waitFor({ timeout: 10000 });
+
+		await page.getByRole('button', { name: '읽기 전용 링크' }).click();
+		copiedText = await page.evaluate(() => window.__copiedText ?? '');
+
+		const copiedUrl = new URL(copiedText);
+		const hashParams = new URLSearchParams(copiedUrl.hash.slice(1));
+
+		expect(copiedUrl.searchParams.get('readonly')).toBe('1');
+		expect(copiedUrl.searchParams.get('transport')).toBe('encrypted');
+		expect(hashParams.get('key')).toBeTruthy();
+		expect(hashParams.get('verifyKey')).toBeTruthy();
+		expect(hashParams.get('writeKey')).toBeNull();
+	});
+
 	test('should export current document as text', async ({ page }) => {
 		await page.goto('/room/e2e-export');
 
@@ -148,11 +189,11 @@ test.describe('Real-time collaboration (same-browser fallback)', () => {
 	test('two tabs should sync content via BroadcastChannel', async ({ context }) => {
 		await context.addInitScript(() => {
 			const OriginalBroadcastChannel = window.BroadcastChannel;
-			(window as any).__syncingshBroadcastMessages = [];
+			window.__syncingshBroadcastMessages = [];
 
 			window.BroadcastChannel = class extends OriginalBroadcastChannel {
 				postMessage(message: unknown) {
-					(window as any).__syncingshBroadcastMessages.push(message);
+					window.__syncingshBroadcastMessages?.push(message as BroadcastCaptureMessage);
 					return super.postMessage(message);
 				}
 			};
@@ -181,12 +222,10 @@ test.describe('Real-time collaboration (same-browser fallback)', () => {
 		await expect(editor2).toContainText('Synced message from tab 1', { timeout: 10000 });
 
 		const broadcastMessages = await page1.evaluate(() =>
-			((window as any).__syncingshBroadcastMessages ?? []).filter(
-				(message: any) => message.encryptedUpdate
-			)
+			(window.__syncingshBroadcastMessages ?? []).filter((message) => message.encryptedUpdate)
 		);
 		expect(broadcastMessages.length).toBeGreaterThan(0);
-		expect(broadcastMessages.every((message: any) => !message.update)).toBe(true);
+		expect(broadcastMessages.every((message) => !message.update)).toBe(true);
 		expect(JSON.stringify(broadcastMessages)).not.toContain('Synced message from tab 1');
 	});
 

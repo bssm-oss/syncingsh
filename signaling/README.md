@@ -31,16 +31,16 @@ npm start       # node dist/index.js
 
 ## 환경변수
 
-| 변수 | 기본값 | 설명 |
-|---|---|---|
+| 변수   | 기본값 | 설명      |
+| ------ | ------ | --------- |
 | `PORT` | `4444` | 서버 포트 |
 
 ## 엔드포인트
 
-| 경로 | 프로토콜 | 설명 |
-|---|---|---|
-| `/` | WebSocket | y-webrtc 시그널링 (subscribe, publish, ping) |
-| `/health` | HTTP GET | 헬스체크 (`ok` 반환) |
+| 경로      | 프로토콜  | 설명                                         |
+| --------- | --------- | -------------------------------------------- |
+| `/`       | WebSocket | y-webrtc 시그널링 (subscribe, publish, ping) |
+| `/health` | HTTP GET  | 헬스체크 (`ok` 반환)                         |
 
 ## 프로토콜
 
@@ -85,7 +85,7 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "4444:4444"       # 호스트:컨테이너
+      - '4444:4444' # 호스트:컨테이너
     environment:
       - PORT=4444
 ```
