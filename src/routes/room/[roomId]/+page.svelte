@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import * as Y from 'yjs';
 	import { createClient } from '@liveblocks/client';
+	import type { JsonObject } from '@liveblocks/client';
 	import { getYjsProviderForRoom } from '@liveblocks/yjs';
 	import Editor from '$lib/components/Editor.svelte';
 	import TabBar from '$lib/components/TabBar.svelte';
@@ -22,7 +23,7 @@
 		serializeEnvelope,
 		verifyTextSignature
 	} from '$lib/utils/localEncryption';
-	import type { WriteCapability } from '$lib/utils/localEncryption';
+	import type { EncryptedEnvelope, WriteCapability } from '$lib/utils/localEncryption';
 	import type { ConnectionStatus } from '$lib/types/yjs';
 
 	interface TabMeta {
@@ -32,21 +33,41 @@
 	}
 
 	type EncryptedTransportEvent =
-		| {
+		| (JsonObject & {
 				type: 'syncingsh-yjs-update';
 				origin: string;
-				signedUpdate: unknown;
-		  }
-		| {
+				signedUpdate: SignedEncryptedPayload;
+		  })
+		| (JsonObject & {
 				type: 'syncingsh-sync-request';
 				origin: string;
-		  };
+		  });
 
 	const ENCRYPTED_SNAPSHOT_KEY = 'syncingshEncryptedSnapshot';
 
-	interface SignedEncryptedPayload {
-		envelope: unknown;
+	type SignedEncryptedPayload = JsonObject & {
+		envelope: JsonObject;
 		signature: string;
+	};
+
+	interface EncryptedStorageRoot {
+		get(key: string): unknown;
+		set(key: string, value: string): void;
+	}
+
+	interface EncryptedRoom {
+		broadcastEvent(event: EncryptedTransportEvent): void;
+		getStorage(): Promise<{ root: EncryptedStorageRoot }>;
+		subscribe(type: 'event', callback: (message: { event: unknown }) => void): () => void;
+	}
+
+	interface AwarenessLike {
+		setLocalStateField(field: string, value: unknown): void;
+		getStates(): Map<number, unknown>;
+		on(event: string, cb: () => void): void;
+		off(event: string, cb: () => void): void;
+		clientID?: number;
+		doc?: { clientID: number };
 	}
 
 	const roomId = $derived($page.params.roomId);
@@ -54,7 +75,7 @@
 	const usesEncryptedTransport = $derived($page.url.searchParams.get('transport') === 'encrypted');
 
 	let ydoc = $state<Y.Doc | null>(null);
-	let awareness = $state<any | null>(null);
+	let awareness = $state<AwarenessLike | null>(null);
 	let connectionStatus = $state<ConnectionStatus>('disconnected');
 	let nickname = $state('');
 	let editingName = $state(false);
@@ -87,12 +108,12 @@
 
 	function syncTabsFromYjs() {
 		if (!yTabs) return;
-		const seen = new Set<string>();
+		const seen: string[] = [];
 		const arr: TabMeta[] = [];
 		for (let i = 0; i < yTabs.length; i++) {
 			const t = yTabs.get(i);
-			if (!seen.has(t.id)) {
-				seen.add(t.id);
+			if (!seen.includes(t.id)) {
+				seen.push(t.id);
 				arr.push(t);
 			}
 		}
@@ -254,11 +275,11 @@
 		);
 	}
 
-	async function signEnvelope(envelope: unknown, capability: WriteCapability) {
+	async function signEnvelope(envelope: EncryptedEnvelope, capability: WriteCapability) {
 		if (!capability.privateKey) return null;
 		const serialized = JSON.stringify(envelope);
 		return {
-			envelope,
+			envelope: envelope as unknown as JsonObject,
 			signature: await signText(capability.privateKey, serialized)
 		};
 	}
@@ -277,7 +298,7 @@
 		doc: Y.Doc,
 		encryptionKey: CryptoKey,
 		writeCapability: WriteCapability,
-		room: any
+		room: EncryptedRoom
 	) {
 		try {
 			const { root } = await room.getStorage();
@@ -298,7 +319,7 @@
 		doc: Y.Doc,
 		encryptionKey: CryptoKey,
 		writeCapability: WriteCapability,
-		room: any
+		room: EncryptedRoom
 	) {
 		try {
 			if (!writeCapability.privateKey) return;
@@ -407,7 +428,7 @@
 		doc: Y.Doc,
 		encryptionKey: CryptoKey,
 		writeCapability: WriteCapability,
-		room: any
+		room: EncryptedRoom
 	) {
 		const origin = fallbackOrigin();
 		let pendingSnapshot = Promise.resolve();
