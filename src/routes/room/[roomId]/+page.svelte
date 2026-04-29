@@ -13,11 +13,16 @@
 		decryptEnvelope,
 		encryptBytes,
 		ensureRoomKey,
+		ensureWriteCapability,
 		importRoomKey,
 		isEncryptedEnvelope,
 		parseEncryptedEnvelope,
-		serializeEnvelope
+		removeWriteCapability,
+		signText,
+		serializeEnvelope,
+		verifyTextSignature
 	} from '$lib/utils/localEncryption';
+	import type { WriteCapability } from '$lib/utils/localEncryption';
 	import type { ConnectionStatus } from '$lib/types/yjs';
 
 	interface TabMeta {
@@ -30,7 +35,7 @@
 		| {
 				type: 'syncingsh-yjs-update';
 				origin: string;
-				encryptedUpdate: unknown;
+				signedUpdate: unknown;
 		  }
 		| {
 				type: 'syncingsh-sync-request';
@@ -38,6 +43,11 @@
 		  };
 
 	const ENCRYPTED_SNAPSHOT_KEY = 'syncingshEncryptedSnapshot';
+
+	interface SignedEncryptedPayload {
+		envelope: unknown;
+		signature: string;
+	}
 
 	const roomId = $derived($page.params.roomId);
 	const isReadonly = $derived($page.url.searchParams.get('readonly') === '1');
@@ -160,7 +170,7 @@
 	}
 
 	async function copyReadonlyLink() {
-		const url = new URL(window.location.href);
+		const url = removeWriteCapability(new URL(window.location.href));
 		url.searchParams.set('readonly', '1');
 
 		try {
@@ -235,13 +245,47 @@
 		);
 	}
 
-	async function restoreEncryptedRoomSnapshot(doc: Y.Doc, encryptionKey: CryptoKey, room: any) {
+	function isSignedEncryptedPayload(value: unknown): value is SignedEncryptedPayload {
+		return (
+			!!value &&
+			typeof value === 'object' &&
+			'envelope' in value &&
+			typeof (value as SignedEncryptedPayload).signature === 'string'
+		);
+	}
+
+	async function signEnvelope(envelope: unknown, capability: WriteCapability) {
+		if (!capability.privateKey) return null;
+		const serialized = JSON.stringify(envelope);
+		return {
+			envelope,
+			signature: await signText(capability.privateKey, serialized)
+		};
+	}
+
+	async function verifySignedEnvelope(payload: unknown, capability: WriteCapability) {
+		if (!capability.publicKey || !isSignedEncryptedPayload(payload)) return null;
+		const verified = await verifyTextSignature(
+			capability.publicKey,
+			JSON.stringify(payload.envelope),
+			payload.signature
+		);
+		return verified && isEncryptedEnvelope(payload.envelope) ? payload.envelope : null;
+	}
+
+	async function restoreEncryptedRoomSnapshot(
+		doc: Y.Doc,
+		encryptionKey: CryptoKey,
+		writeCapability: WriteCapability,
+		room: any
+	) {
 		try {
 			const { root } = await room.getStorage();
 			const stored = root.get(ENCRYPTED_SNAPSHOT_KEY);
 			if (typeof stored !== 'string') return;
 
-			const envelope = parseEncryptedEnvelope(stored);
+			const payload = JSON.parse(stored) as unknown;
+			const envelope = await verifySignedEnvelope(payload, writeCapability);
 			if (!envelope) return;
 
 			Y.applyUpdate(doc, await decryptEnvelope(encryptionKey, envelope), 'encrypted-snapshot');
@@ -250,17 +294,25 @@
 		}
 	}
 
-	async function persistEncryptedRoomSnapshot(doc: Y.Doc, encryptionKey: CryptoKey, room: any) {
+	async function persistEncryptedRoomSnapshot(
+		doc: Y.Doc,
+		encryptionKey: CryptoKey,
+		writeCapability: WriteCapability,
+		room: any
+	) {
 		try {
+			if (!writeCapability.privateKey) return;
 			const { root } = await room.getStorage();
 			const envelope = await encryptBytes(encryptionKey, Y.encodeStateAsUpdate(doc));
-			root.set(ENCRYPTED_SNAPSHOT_KEY, serializeEnvelope(envelope));
+			const signedPayload = await signEnvelope(envelope, writeCapability);
+			if (!signedPayload) return;
+			root.set(ENCRYPTED_SNAPSHOT_KEY, JSON.stringify(signedPayload));
 		} catch {
 			// Keep editing even when durable encrypted snapshot persistence fails.
 		}
 	}
 
-	function connectLocalFallback(doc: Y.Doc, encryptionKey: CryptoKey) {
+	function connectLocalFallback(doc: Y.Doc, encryptionKey: CryptoKey, canWrite = true) {
 		let pendingPersist = Promise.resolve();
 		const schedulePersist = () => {
 			pendingPersist = pendingPersist.then(() => persistLocalDoc(doc, encryptionKey));
@@ -268,7 +320,11 @@
 				// persistLocalDoc already keeps editing available when storage fails.
 			});
 		};
-		const onStorageOnlyUpdate = () => schedulePersist();
+		const canRebroadcastUpdate = (updateOrigin: unknown) =>
+			canWrite || updateOrigin === 'remote' || updateOrigin === 'encrypted-transport';
+		const onStorageOnlyUpdate = (_update: Uint8Array, updateOrigin: unknown) => {
+			if (canRebroadcastUpdate(updateOrigin)) schedulePersist();
+		};
 
 		if (typeof BroadcastChannel === 'undefined') {
 			doc.on('update', onStorageOnlyUpdate);
@@ -283,7 +339,8 @@
 			channel.postMessage({ origin, encryptedUpdate: envelope });
 		};
 
-		const onUpdate = (update: Uint8Array) => {
+		const onUpdate = (update: Uint8Array, updateOrigin: unknown) => {
+			if (!canRebroadcastUpdate(updateOrigin)) return;
 			schedulePersist();
 			void postEncryptedUpdate(update).catch(() => {
 				// Local persistence still protects reload recovery if cross-tab broadcast fails.
@@ -346,12 +403,17 @@
 		};
 	}
 
-	function connectEncryptedRoomTransport(doc: Y.Doc, encryptionKey: CryptoKey, room: any) {
+	function connectEncryptedRoomTransport(
+		doc: Y.Doc,
+		encryptionKey: CryptoKey,
+		writeCapability: WriteCapability,
+		room: any
+	) {
 		const origin = fallbackOrigin();
 		let pendingSnapshot = Promise.resolve();
 		const scheduleSnapshotPersist = () => {
 			pendingSnapshot = pendingSnapshot.then(() =>
-				persistEncryptedRoomSnapshot(doc, encryptionKey, room)
+				persistEncryptedRoomSnapshot(doc, encryptionKey, writeCapability, room)
 			);
 			void pendingSnapshot.catch(() => {
 				// persistEncryptedRoomSnapshot already keeps editing available when storage fails.
@@ -359,11 +421,14 @@
 		};
 
 		const broadcastUpdate = async (update: Uint8Array) => {
+			if (!writeCapability.privateKey) return;
 			const envelope = await encryptBytes(encryptionKey, update);
+			const signedUpdate = await signEnvelope(envelope, writeCapability);
+			if (!signedUpdate) return;
 			room.broadcastEvent({
 				type: 'syncingsh-yjs-update',
 				origin,
-				encryptedUpdate: envelope
+				signedUpdate
 			});
 		};
 
@@ -387,8 +452,8 @@
 
 			void (async () => {
 				try {
-					const envelope = event.encryptedUpdate;
-					if (!isEncryptedEnvelope(envelope)) return;
+					const envelope = await verifySignedEnvelope(event.signedUpdate, writeCapability);
+					if (!envelope) return;
 					Y.applyUpdate(doc, await decryptEnvelope(encryptionKey, envelope), 'encrypted-transport');
 					scheduleSnapshotPersist();
 				} catch {
@@ -436,7 +501,11 @@
 		void (async () => {
 			nickname = getNickname();
 			const userColor = getUserColor();
-			const encryptionKey = await importRoomKey(ensureRoomKey(new URL(window.location.href)));
+			const roomUrl = new URL(window.location.href);
+			const encryptionKey = await importRoomKey(ensureRoomKey(roomUrl));
+			const writeCapability = usesEncryptedTransport
+				? await ensureWriteCapability(roomUrl, !isReadonly)
+				: null;
 			const doc = new Y.Doc();
 			await restoreLocalDoc(doc, encryptionKey);
 			if (disposed) {
@@ -444,7 +513,7 @@
 				return;
 			}
 
-			cleanupLocalFallback = connectLocalFallback(doc, encryptionKey);
+			cleanupLocalFallback = connectLocalFallback(doc, encryptionKey, !isReadonly);
 			activeDoc = doc;
 
 			ydoc = doc;
@@ -480,7 +549,8 @@
 			const { room, leave } = client.enterRoom(roomId);
 
 			if (usesEncryptedTransport) {
-				await restoreEncryptedRoomSnapshot(doc, encryptionKey, room);
+				if (!writeCapability) return;
+				await restoreEncryptedRoomSnapshot(doc, encryptionKey, writeCapability, room);
 				if (disposed) {
 					leave();
 					doc.destroy();
@@ -497,7 +567,12 @@
 
 				mapStatus(room.getStatus());
 				const unsubscribeStatus = room.subscribe('status', mapStatus);
-				cleanupEncryptedTransport = connectEncryptedRoomTransport(doc, encryptionKey, room);
+				cleanupEncryptedTransport = connectEncryptedRoomTransport(
+					doc,
+					encryptionKey,
+					writeCapability,
+					room
+				);
 				cleanupProvider = () => {
 					unsubscribeStatus();
 					leave();
@@ -514,7 +589,7 @@
 				return;
 			}
 			cleanupLocalFallback();
-			cleanupLocalFallback = connectLocalFallback(liveblocksDoc, encryptionKey);
+			cleanupLocalFallback = connectLocalFallback(liveblocksDoc, encryptionKey, !isReadonly);
 			activeDoc = liveblocksDoc;
 
 			const mapStatus = (status: string) => {

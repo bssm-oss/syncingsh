@@ -115,6 +115,35 @@ test.describe('Room page', () => {
 		await expect(editor).not.toContainText('Should not appear');
 	});
 
+	test('should omit writer capability from encrypted read-only links', async ({ page }) => {
+		let copiedText = '';
+		await page.addInitScript(() => {
+			Object.defineProperty(navigator, 'clipboard', {
+				value: {
+					writeText: async (value: string) => {
+						(window as any).__copiedText = value;
+					}
+				},
+				configurable: true
+			});
+		});
+
+		await page.goto(`/room/e2e-readonly-capability-${Date.now()}?transport=encrypted`);
+		await page.locator('.tiptap').waitFor({ timeout: 10000 });
+
+		await page.getByRole('button', { name: '읽기 전용 링크' }).click();
+		copiedText = await page.evaluate(() => (window as any).__copiedText ?? '');
+
+		const copiedUrl = new URL(copiedText);
+		const hashParams = new URLSearchParams(copiedUrl.hash.slice(1));
+
+		expect(copiedUrl.searchParams.get('readonly')).toBe('1');
+		expect(copiedUrl.searchParams.get('transport')).toBe('encrypted');
+		expect(hashParams.get('key')).toBeTruthy();
+		expect(hashParams.get('verifyKey')).toBeTruthy();
+		expect(hashParams.get('writeKey')).toBeNull();
+	});
+
 	test('should export current document as text', async ({ page }) => {
 		await page.goto('/room/e2e-export');
 
