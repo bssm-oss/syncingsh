@@ -18,7 +18,7 @@ test.describe('Landing page', () => {
 		await page.getByPlaceholder('방 코드 입력').fill('abcd1234');
 		await page.getByRole('button', { name: '참여하기' }).click();
 
-		await expect(page).toHaveURL('/room/abcd1234');
+		await expect(page).toHaveURL(/\/room\/abcd1234#key=.+/);
 	});
 
 	test('should show error for invalid room code', async ({ page }) => {
@@ -146,13 +146,26 @@ test.describe('Room page', () => {
 
 test.describe('Real-time collaboration (same-browser fallback)', () => {
 	test('two tabs should sync content via BroadcastChannel', async ({ context }) => {
-		const roomPath = '/room/e2e-sync-test';
+		await context.addInitScript(() => {
+			const OriginalBroadcastChannel = window.BroadcastChannel;
+			(window as any).__syncingshBroadcastMessages = [];
+
+			window.BroadcastChannel = class extends OriginalBroadcastChannel {
+				postMessage(message: unknown) {
+					(window as any).__syncingshBroadcastMessages.push(message);
+					return super.postMessage(message);
+				}
+			};
+		});
+
+		const roomPath = `/room/e2e-sync-test-${Date.now()}`;
 
 		const page1 = await context.newPage();
 		const page2 = await context.newPage();
 
 		await page1.goto(roomPath);
-		await page2.goto(roomPath);
+		await page1.locator('.tiptap').waitFor({ timeout: 10000 });
+		await page2.goto(page1.url());
 
 		// Wait for both editors to load
 		const editor1 = page1.locator('.tiptap');
@@ -166,6 +179,15 @@ test.describe('Real-time collaboration (same-browser fallback)', () => {
 
 		// Verify it appears in page2
 		await expect(editor2).toContainText('Synced message from tab 1', { timeout: 10000 });
+
+		const broadcastMessages = await page1.evaluate(() =>
+			((window as any).__syncingshBroadcastMessages ?? []).filter(
+				(message: any) => message.encryptedUpdate
+			)
+		);
+		expect(broadcastMessages.length).toBeGreaterThan(0);
+		expect(broadcastMessages.every((message: any) => !message.update)).toBe(true);
+		expect(JSON.stringify(broadcastMessages)).not.toContain('Synced message from tab 1');
 	});
 
 	test('presence should update when peer connects', async ({ context }) => {
@@ -259,7 +281,8 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 
 test.describe('Local reload recovery', () => {
 	test('should restore room content after reload', async ({ page }) => {
-		const roomPath = `/room/e2e-reload-${Date.now()}`;
+		const roomId = `e2e-reload-${Date.now()}`;
+		const roomPath = `/room/${roomId}`;
 
 		await page.goto(roomPath);
 		const editor = page.locator('.tiptap');
@@ -268,6 +291,17 @@ test.describe('Local reload recovery', () => {
 		await editor.click();
 		await page.keyboard.type('Recovered after reload');
 		await expect(editor).toContainText('Recovered after reload');
+
+		const stored = await page.waitForFunction(
+			(key) => localStorage.getItem(key),
+			`syncingsh_room_${roomId}`
+		);
+		const storedValue = await stored.jsonValue<string>();
+		const envelope = JSON.parse(storedValue);
+		expect(envelope).toMatchObject({ v: 1, alg: 'AES-GCM' });
+		expect(envelope).toHaveProperty('iv');
+		expect(envelope).toHaveProperty('data');
+		expect(storedValue).not.toContain('Recovered after reload');
 
 		await page.reload();
 		await expect(page.locator('.tiptap')).toContainText('Recovered after reload', {

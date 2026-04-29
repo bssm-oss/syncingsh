@@ -8,6 +8,16 @@
 	import TabBar from '$lib/components/TabBar.svelte';
 	import Presence from '$lib/components/Presence.svelte';
 	import { getNickname, setNickname, getUserColor } from '$lib/utils/nickname';
+	import {
+		base64ToUpdate,
+		decryptEnvelope,
+		encryptBytes,
+		ensureRoomKey,
+		importRoomKey,
+		isEncryptedEnvelope,
+		parseEncryptedEnvelope,
+		serializeEnvelope
+	} from '$lib/utils/localEncryption';
 	import type { ConnectionStatus } from '$lib/types/yjs';
 
 	interface TabMeta {
@@ -167,21 +177,18 @@
 		return `syncingsh_room_${roomId}`;
 	}
 
-	function updateToBase64(update: Uint8Array): string {
-		let binary = '';
-		for (const byte of update) binary += String.fromCharCode(byte);
-		return btoa(binary);
-	}
-
-	function base64ToUpdate(value: string): Uint8Array {
-		const binary = atob(value);
-		return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-	}
-
-	function restoreLocalDoc(doc: Y.Doc) {
+	async function restoreLocalDoc(doc: Y.Doc, encryptionKey: CryptoKey) {
 		try {
 			const stored = localStorage.getItem(storageKey());
-			if (stored) Y.applyUpdate(doc, base64ToUpdate(stored));
+			if (!stored) return;
+
+			const envelope = parseEncryptedEnvelope(stored);
+			if (envelope) {
+				Y.applyUpdate(doc, await decryptEnvelope(encryptionKey, envelope));
+				return;
+			}
+
+			Y.applyUpdate(doc, base64ToUpdate(stored));
 		} catch {
 			try {
 				localStorage.removeItem(storageKey());
@@ -191,9 +198,10 @@
 		}
 	}
 
-	function persistLocalDoc(doc: Y.Doc) {
+	async function persistLocalDoc(doc: Y.Doc, encryptionKey: CryptoKey) {
 		try {
-			localStorage.setItem(storageKey(), updateToBase64(Y.encodeStateAsUpdate(doc)));
+			const envelope = await encryptBytes(encryptionKey, Y.encodeStateAsUpdate(doc));
+			localStorage.setItem(storageKey(), serializeEnvelope(envelope));
 		} catch {
 			// Keep editing even when local persistence is unavailable.
 		}
@@ -203,41 +211,73 @@
 		return crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
 	}
 
-	function connectLocalFallback(doc: Y.Doc) {
+	function connectLocalFallback(doc: Y.Doc, encryptionKey: CryptoKey) {
+		let pendingPersist = Promise.resolve();
+		const schedulePersist = () => {
+			pendingPersist = pendingPersist.then(() => persistLocalDoc(doc, encryptionKey));
+			void pendingPersist.catch(() => {
+				// persistLocalDoc already keeps editing available when storage fails.
+			});
+		};
+		const onStorageOnlyUpdate = () => schedulePersist();
+
 		if (typeof BroadcastChannel === 'undefined') {
-			doc.on('update', () => persistLocalDoc(doc));
-			return () => {};
+			doc.on('update', onStorageOnlyUpdate);
+			return () => doc.off('update', onStorageOnlyUpdate);
 		}
 
 		const channel = new BroadcastChannel(`syncingsh:${roomId}`);
 		const origin = fallbackOrigin();
 
+		const postEncryptedUpdate = async (update: Uint8Array) => {
+			const envelope = await encryptBytes(encryptionKey, update);
+			channel.postMessage({ origin, encryptedUpdate: envelope });
+		};
+
 		const onUpdate = (update: Uint8Array) => {
-			persistLocalDoc(doc);
-			try {
-				channel.postMessage({ origin, update: updateToBase64(update) });
-			} catch {
+			schedulePersist();
+			void postEncryptedUpdate(update).catch(() => {
 				// Local persistence still protects reload recovery if cross-tab broadcast fails.
-			}
+			});
 		};
 
 		channel.onmessage = (event) => {
-			const message = event.data as { origin?: string; update?: string; requestSync?: boolean };
+			const message = event.data as {
+				origin?: string;
+				update?: string;
+				encryptedUpdate?: unknown;
+				requestSync?: boolean;
+			};
 			if (message.origin === origin) return;
 
 			if (message.requestSync) {
-				try {
-					channel.postMessage({ origin, update: updateToBase64(Y.encodeStateAsUpdate(doc)) });
-				} catch {
+				void postEncryptedUpdate(Y.encodeStateAsUpdate(doc)).catch(() => {
 					// Ignore failed sync responses; the local document remains editable.
-				}
+				});
+				return;
+			}
+
+			if (message.encryptedUpdate) {
+				void (async () => {
+					try {
+						const envelope =
+							typeof message.encryptedUpdate === 'string'
+								? parseEncryptedEnvelope(message.encryptedUpdate)
+								: message.encryptedUpdate;
+						if (!isEncryptedEnvelope(envelope)) return;
+						Y.applyUpdate(doc, await decryptEnvelope(encryptionKey, envelope), 'remote');
+						schedulePersist();
+					} catch {
+						// Ignore updates encrypted for another room key or malformed payloads.
+					}
+				})();
 				return;
 			}
 
 			if (message.update) {
 				try {
 					Y.applyUpdate(doc, base64ToUpdate(message.update), 'remote');
-					persistLocalDoc(doc);
+					schedulePersist();
 				} catch {
 					// Ignore malformed peer updates.
 				}
@@ -273,93 +313,110 @@
 	onMount(() => {
 		if (!roomId) return;
 
-		nickname = getNickname();
-		const userColor = getUserColor();
-		const doc = new Y.Doc();
-		restoreLocalDoc(doc);
-		let cleanupLocalFallback = connectLocalFallback(doc);
+		let disposed = false;
+		let cleanupLocalFallback = () => {};
 		let cleanupProvider = () => {};
+		let activeDoc: Y.Doc | null = null;
 
-		ydoc = doc;
-		yTabs = doc.getArray<TabMeta>('tabs');
-
-		const initTabs = () => {
-			if (!yTabs) return;
-			const DEFAULT_TAB_ID = 'default';
-			const hasDefault = Array.from({ length: yTabs.length }, (_, i) => yTabs!.get(i)).some(
-				(t) => t.id === DEFAULT_TAB_ID
-			);
-			if (!hasDefault) {
-				yTabs.push([{ id: DEFAULT_TAB_ID, name: '문서 1', createdAt: Date.now() }]);
-			}
-			activeTabId = DEFAULT_TAB_ID;
-			syncTabsFromYjs();
-			yTabs.observe(() => syncTabsFromYjs());
-		};
-
-		initTabs();
-
-		const publicKey = import.meta.env.VITE_LIVEBLOCKS_PUBLIC_KEY;
-		if (!publicKey) {
-			connectionStatus = 'error';
-			errorMessage = 'Liveblocks 공개 키가 없어 이 브라우저의 로컬 복구 모드로 실행 중입니다.';
-			return () => {
-				cleanupLocalFallback();
+		void (async () => {
+			nickname = getNickname();
+			const userColor = getUserColor();
+			const encryptionKey = await importRoomKey(ensureRoomKey(new URL(window.location.href)));
+			const doc = new Y.Doc();
+			await restoreLocalDoc(doc, encryptionKey);
+			if (disposed) {
 				doc.destroy();
+				return;
+			}
+
+			cleanupLocalFallback = connectLocalFallback(doc, encryptionKey);
+			activeDoc = doc;
+
+			ydoc = doc;
+			yTabs = doc.getArray<TabMeta>('tabs');
+
+			const initTabs = () => {
+				if (!yTabs) return;
+				const DEFAULT_TAB_ID = 'default';
+				const hasDefault = Array.from({ length: yTabs.length }, (_, i) => yTabs!.get(i)).some(
+					(t) => t.id === DEFAULT_TAB_ID
+				);
+				if (!hasDefault) {
+					yTabs.push([{ id: DEFAULT_TAB_ID, name: '문서 1', createdAt: Date.now() }]);
+				}
+				activeTabId = DEFAULT_TAB_ID;
+				syncTabsFromYjs();
+				yTabs.observe(() => syncTabsFromYjs());
 			};
-		}
 
-		const client = createClient({
-			publicApiKey: publicKey
-		});
-
-		const { room, leave } = client.enterRoom(roomId);
-		const provider = getYjsProviderForRoom(room);
-		const liveblocksDoc = provider.getYDoc();
-		restoreLocalDoc(liveblocksDoc);
-		cleanupLocalFallback();
-		cleanupLocalFallback = connectLocalFallback(liveblocksDoc);
-
-		const mapStatus = (status: string) => {
-			if (status === 'connected') connectionStatus = 'connected';
-			else if (status === 'connecting' || status === 'reconnecting')
-				connectionStatus = 'connecting';
-			else if (status === 'disconnected') connectionStatus = 'disconnected';
-		};
-
-		mapStatus(room.getStatus());
-		const unsubscribeStatus = room.subscribe('status', mapStatus);
-
-		provider.awareness.setLocalStateField('user', {
-			name: nickname,
-			color: userColor
-		});
-
-		ydoc = liveblocksDoc;
-		awareness = provider.awareness;
-		connectionStatus = 'connecting';
-
-		yTabs = liveblocksDoc.getArray<TabMeta>('tabs');
-
-		if (provider.synced) {
 			initTabs();
-		} else {
-			const onSynced = () => {
-				provider.off('sync', onSynced);
-				initTabs();
-			};
-			provider.on('sync', onSynced);
-		}
 
-		cleanupProvider = () => {
-			unsubscribeStatus();
-			leave();
-		};
+			const publicKey = import.meta.env.VITE_LIVEBLOCKS_PUBLIC_KEY;
+			if (!publicKey) {
+				connectionStatus = 'error';
+				errorMessage = 'Liveblocks 공개 키가 없어 이 브라우저의 로컬 복구 모드로 실행 중입니다.';
+				return;
+			}
+
+			const client = createClient({
+				publicApiKey: publicKey
+			});
+
+			const { room, leave } = client.enterRoom(roomId);
+			const provider = getYjsProviderForRoom(room);
+			const liveblocksDoc = provider.getYDoc();
+			await restoreLocalDoc(liveblocksDoc, encryptionKey);
+			if (disposed) {
+				leave();
+				liveblocksDoc.destroy();
+				return;
+			}
+			cleanupLocalFallback();
+			cleanupLocalFallback = connectLocalFallback(liveblocksDoc, encryptionKey);
+			activeDoc = liveblocksDoc;
+
+			const mapStatus = (status: string) => {
+				if (status === 'connected') connectionStatus = 'connected';
+				else if (status === 'connecting' || status === 'reconnecting')
+					connectionStatus = 'connecting';
+				else if (status === 'disconnected') connectionStatus = 'disconnected';
+			};
+
+			mapStatus(room.getStatus());
+			const unsubscribeStatus = room.subscribe('status', mapStatus);
+
+			provider.awareness.setLocalStateField('user', {
+				name: nickname,
+				color: userColor
+			});
+
+			ydoc = liveblocksDoc;
+			awareness = provider.awareness;
+			connectionStatus = 'connecting';
+
+			yTabs = liveblocksDoc.getArray<TabMeta>('tabs');
+
+			if (provider.synced) {
+				initTabs();
+			} else {
+				const onSynced = () => {
+					provider.off('sync', onSynced);
+					initTabs();
+				};
+				provider.on('sync', onSynced);
+			}
+
+			cleanupProvider = () => {
+				unsubscribeStatus();
+				leave();
+			};
+		})();
 
 		return () => {
+			disposed = true;
 			cleanupProvider();
 			cleanupLocalFallback();
-			liveblocksDoc.destroy();
+			activeDoc?.destroy();
 		};
 	});
 </script>
