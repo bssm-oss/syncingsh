@@ -7,8 +7,35 @@ describe('/+page.svelte', () => {
 	it('should render landing page title and description', async () => {
 		render(Page);
 
-		await expect.element(page.getByText('syncingsh')).toBeInTheDocument();
-		await expect.element(page.getByText('실시간 공유 메모장')).toBeInTheDocument();
+		await expect.element(page.getByText('Free Online Shared Notepad')).toBeInTheDocument();
+		await expect
+			.element(
+				page.getByText(
+					'Create a shared notepad, invite others with a link, and write together in real time.'
+				)
+			)
+			.toBeInTheDocument();
+	});
+
+	it('should render SharedPad SEO metadata', () => {
+		render(Page);
+
+		expect(document.title).toBe('SharedPad - Free Online Shared Notepad');
+		expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe(
+			'Create a shared notepad, invite others with a link, and write together in real time.'
+		);
+		expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(
+			'https://sharedpad.justn.me'
+		);
+		expect(document.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe(
+			'SharedPad - Free Online Shared Notepad'
+		);
+		expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe(
+			'https://sharedpad.justn.me'
+		);
+		expect(document.querySelector('meta[name="twitter:card"]')?.getAttribute('content')).toBe(
+			'summary'
+		);
 	});
 
 	it('should have create room and join buttons', async () => {

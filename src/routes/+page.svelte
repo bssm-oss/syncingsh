@@ -5,6 +5,12 @@
 	import { generateRoomCode, isValidRoomCode } from '$lib/utils/roomCode';
 	import { getNickname, setNickname, hasCustomNickname } from '$lib/utils/nickname';
 
+	const PAGE_TITLE = 'SharedPad - Free Online Shared Notepad';
+	const PAGE_DESCRIPTION =
+		'Create a shared notepad, invite others with a link, and write together in real time.';
+	const CANONICAL_URL = 'https://sharedpad.justn.me';
+	const PAGE_H1 = 'Free Online Shared Notepad';
+
 	let joinCode = $state('');
 	let nickname = $state('');
 	let error = $state('');
@@ -38,11 +44,24 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{PAGE_TITLE}</title>
+	<meta name="description" content={PAGE_DESCRIPTION} />
+	<link rel="canonical" href={CANONICAL_URL} />
+	<meta property="og:title" content={PAGE_TITLE} />
+	<meta property="og:description" content={PAGE_DESCRIPTION} />
+	<meta property="og:url" content={CANONICAL_URL} />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content={PAGE_TITLE} />
+	<meta name="twitter:description" content={PAGE_DESCRIPTION} />
+</svelte:head>
+
 <div class="flex min-h-screen items-center justify-center bg-gray-50">
 	<div class="w-full max-w-sm space-y-8 px-4">
 		<div class="text-center">
-			<h1 class="text-3xl font-bold text-gray-900">syncingsh</h1>
-			<p class="mt-2 text-gray-500">실시간 공유 메모장</p>
+			<h1 class="text-3xl font-bold text-gray-900">{PAGE_H1}</h1>
+			<p class="mt-2 text-gray-500">{PAGE_DESCRIPTION}</p>
 			<div class="mt-4 space-y-1 rounded-lg bg-gray-100 px-4 py-3 text-left text-sm text-gray-700">
 				<p><span class="font-semibold">로그인 없이</span> 바로 시작</p>
 				<p><span class="font-semibold">링크나 방 코드만 공유</span>하면 누구나 참여</p>
