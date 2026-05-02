@@ -9,8 +9,6 @@ declare global {
 	interface Window {
 		__copiedText?: string;
 		__syncingshBroadcastMessages?: BroadcastCaptureMessage[];
-		__syncingshEncryptedSnapshotPersistedAt?: number;
-		__syncingshEncryptedSnapshotPersistedCount?: number;
 	}
 }
 
@@ -137,7 +135,9 @@ test.describe('Room page', () => {
 		await expect(editor).not.toContainText('Should not appear');
 	});
 
-	test('should omit writer capability from encrypted read-only links', async ({ page }) => {
+	test('should keep shared key while removing writer capability from read-only links', async ({
+		page
+	}) => {
 		let copiedText = '';
 		await page.addInitScript(() => {
 			Object.defineProperty(navigator, 'clipboard', {
@@ -150,7 +150,7 @@ test.describe('Room page', () => {
 			});
 		});
 
-		await page.goto(`/room/e2ero${Date.now().toString(36)}?transport=encrypted`);
+		await page.goto(`/room/e2ero${Date.now().toString(36)}`);
 		await page.locator('.tiptap').waitFor({ timeout: 10000 });
 
 		await page.getByRole('button', { name: '읽기 전용 링크' }).click();
@@ -160,9 +160,8 @@ test.describe('Room page', () => {
 		const hashParams = new URLSearchParams(copiedUrl.hash.slice(1));
 
 		expect(copiedUrl.searchParams.get('readonly')).toBe('1');
-		expect(copiedUrl.searchParams.get('transport')).toBe('encrypted');
 		expect(hashParams.get('key')).toBeTruthy();
-		expect(hashParams.get('verifyKey')).toBeTruthy();
+		expect(hashParams.get('verifyKey')).toBeNull();
 		expect(hashParams.get('writeKey')).toBeNull();
 	});
 
@@ -181,17 +180,10 @@ test.describe('Room page', () => {
 		expect(download.suggestedFilename()).toBe('문서 1.txt');
 	});
 
-	test('should show degraded local recovery mode without Liveblocks key', async ({ page }) => {
-		test.skip(
-			!!process.env.VITE_LIVEBLOCKS_PUBLIC_KEY,
-			'Only applies when Liveblocks key is absent'
-		);
-
-		await page.goto('/room/e2edegraded');
+	test('should load through Render signaling without extra environment keys', async ({ page }) => {
+		await page.goto('/room/e2erenderload');
 
 		await expect(page.locator('.tiptap')).toBeVisible({ timeout: 10000 });
-		await expect(page.getByText('Liveblocks 공개 키가 없어')).toBeVisible();
-		await expect(page.getByText('새로고침해도 복구됩니다')).toBeVisible();
 	});
 });
 
@@ -240,11 +232,6 @@ test.describe('Real-time collaboration (same-browser fallback)', () => {
 	});
 
 	test('presence should update when peer connects', async ({ context }) => {
-		test.skip(
-			!process.env.VITE_LIVEBLOCKS_PUBLIC_KEY,
-			'Liveblocks public key is required for presence tests'
-		);
-
 		const roomPath = '/room/e2epresence';
 
 		const page1 = await context.newPage();
@@ -264,13 +251,9 @@ test.describe('Real-time collaboration (same-browser fallback)', () => {
 	});
 });
 
-test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
+test.describe('Render signaling sync (cross-browser, WebRTC)', () => {
 	let context1: BrowserContext;
 	let context2: BrowserContext;
-
-	if (!process.env.VITE_LIVEBLOCKS_PUBLIC_KEY) {
-		test.skip(true, 'VITE_LIVEBLOCKS_PUBLIC_KEY is required for Liveblocks sync tests');
-	}
 
 	test.beforeEach(async ({ browser }) => {
 		// Separate browser contexts = separate browsers (no BroadcastChannel)
@@ -283,8 +266,8 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 		await context2.close();
 	});
 
-	test('two separate browsers should sync via Liveblocks WebSocket', async () => {
-		const roomPath = '/room/e2eliveblocks';
+	test('two separate browsers should sync via Render signaling', async () => {
+		const roomPath = '/room/e2erendersync';
 
 		const page1 = await context1.newPage();
 		const page2 = await context2.newPage();
@@ -297,80 +280,13 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 		await editor1.waitFor({ timeout: 10000 });
 		await editor2.waitFor({ timeout: 10000 });
 
-		// Wait for Liveblocks connection to establish
+		// Wait for WebRTC peers to connect through the Render signaling server.
 		await page1.waitForTimeout(2000);
 
-		// Type in page1
 		await editor1.click();
-		await page1.keyboard.type('Liveblocks sync works!');
+		await page1.keyboard.type('Render signaling sync works!');
 
-		// Verify it appears in page2 via Liveblocks
-		await expect(editor2).toContainText('Liveblocks sync works!', { timeout: 15000 });
-	});
-
-	test('two separate browsers should sync via encrypted transport prototype', async () => {
-		const roomPath = `/room/e2eenc${Date.now().toString(36)}?transport=encrypted`;
-
-		const page1 = await context1.newPage();
-		await page1.goto(roomPath);
-		await page1.locator('.tiptap').waitFor({ timeout: 10000 });
-
-		const page2 = await context2.newPage();
-		await page2.goto(page1.url());
-
-		const editor1 = page1.locator('.tiptap');
-		const editor2 = page2.locator('.tiptap');
-		await editor1.waitFor({ timeout: 10000 });
-		await editor2.waitFor({ timeout: 10000 });
-
-		await editor1.click();
-		await page1.keyboard.type('Encrypted transport sync works!');
-
-		await expect(editor2).toContainText('Encrypted transport sync works!', { timeout: 15000 });
-	});
-
-	test('late joiner should restore encrypted transport snapshot', async () => {
-		const roomPath = `/room/e2esnap${Date.now().toString(36)}?transport=encrypted`;
-
-		const page1 = await context1.newPage();
-		await page1.addInitScript(() => {
-			window.__syncingshEncryptedSnapshotPersistedAt = 0;
-			window.__syncingshEncryptedSnapshotPersistedCount = 0;
-			window.addEventListener('syncingsh:encrypted-snapshot-persisted', () => {
-				window.__syncingshEncryptedSnapshotPersistedAt = Date.now();
-				window.__syncingshEncryptedSnapshotPersistedCount =
-					(window.__syncingshEncryptedSnapshotPersistedCount ?? 0) + 1;
-			});
-		});
-		await page1.goto(roomPath);
-
-		const editor1 = page1.locator('.tiptap');
-		await editor1.waitFor({ timeout: 10000 });
-		const previousSnapshotCount = await page1.evaluate(
-			() => window.__syncingshEncryptedSnapshotPersistedCount ?? 0
-		);
-		await editor1.click();
-		await page1.keyboard.type('Recovered from encrypted snapshot');
-		await expect(editor1).toContainText('Recovered from encrypted snapshot');
-
-		const sharedUrl = page1.url();
-		await page1.waitForFunction(
-			(snapshotCount) => {
-				const count = window.__syncingshEncryptedSnapshotPersistedCount ?? 0;
-				const persistedAt = window.__syncingshEncryptedSnapshotPersistedAt ?? 0;
-				return count > snapshotCount && Date.now() - persistedAt > 500;
-			},
-			previousSnapshotCount,
-			{ timeout: 15000 }
-		);
-		await context1.close();
-
-		const page2 = await context2.newPage();
-		await page2.goto(sharedUrl);
-
-		await expect(page2.locator('.tiptap')).toContainText('Recovered from encrypted snapshot', {
-			timeout: 15000
-		});
+		await expect(editor2).toContainText('Render signaling sync works!', { timeout: 15000 });
 	});
 
 	test('presence should work across separate browsers', async () => {
@@ -388,7 +304,7 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 		await page2.goto(roomPath);
 		await page2.locator('.tiptap').waitFor({ timeout: 10000 });
 
-		// Presence should update via Liveblocks
+		// Presence should update via WebRTC awareness.
 		await expect(page1.getByText(/1명/)).toBeVisible({ timeout: 15000 });
 	});
 });
