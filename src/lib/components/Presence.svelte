@@ -22,6 +22,24 @@
 
 	let users = $state<User[]>([]);
 
+	function isSafeUserColor(value: unknown): value is string {
+		if (typeof value !== 'string') return false;
+		const match = /^hsl\((\d{1,3}), 70%, 60%\)$/.exec(value);
+		if (!match) return false;
+		const hue = Number(match[1]);
+		return Number.isInteger(hue) && hue >= 0 && hue <= 359;
+	}
+
+	function normalizeUser(value: unknown): User | null {
+		if (!value || typeof value !== 'object') return null;
+		const user = value as Partial<User>;
+		if (typeof user.name !== 'string') return null;
+		if (!isSafeUserColor(user.color)) return null;
+		const name = user.name.trim().slice(0, 20);
+		if (!name) return null;
+		return { name, color: user.color };
+	}
+
 	onMount(() => {
 		const update = () => {
 			const states = awareness.getStates();
@@ -30,14 +48,15 @@
 
 			states.forEach((state, clientId) => {
 				if (
-					clientId !== localId &&
-					state !== null &&
-					typeof state === 'object' &&
-					'user' in state &&
-					state.user
+					clientId === localId ||
+					state === null ||
+					typeof state !== 'object' ||
+					!('user' in state)
 				) {
-					result.push(state.user as User);
+					return;
 				}
+				const user = normalizeUser(state.user);
+				if (user) result.push(user);
 			});
 
 			users = result;
