@@ -23,8 +23,7 @@
 
 ### Working In This Directory
 
-- DEV 환경: `ws://${window.location.hostname}:4444` signaling (LAN 테스트 지원)
-- PROD 환경: `wss://signaling.yjs.dev` signaling
+- DEV/PROD 기본 signaling: `wss://syncingsh-signaling.onrender.com/`
 - `onMount`에서 Y.Doc + WebrtcProvider 초기화, cleanup에서 destroy
 - awareness로 로컬 유저 정보(name, color)를 피어에 전파
 
