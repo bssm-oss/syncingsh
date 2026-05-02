@@ -48,14 +48,14 @@ test.describe('Landing page', () => {
 
 test.describe('Room page', () => {
 	test('should render editor and room header', async ({ page }) => {
-		await page.goto('/room/e2e-test-basic');
+		await page.goto('/room/e2etestbasic');
 
-		await expect(page.getByText('Room: e2e-test-basic')).toBeVisible();
+		await expect(page.getByText('Room: e2etestbasic')).toBeVisible();
 		await expect(page.locator('.tiptap')).toBeVisible({ timeout: 10000 });
 	});
 
 	test('should display nickname that is clickable for editing', async ({ page }) => {
-		await page.goto('/room/e2e-test-nick');
+		await page.goto('/room/e2etestnick');
 
 		// Guest nickname should appear
 		const nickButton = page.locator('button', { hasText: /Guest\d+/ });
@@ -68,13 +68,13 @@ test.describe('Room page', () => {
 	});
 
 	test('should show solo presence state', async ({ page }) => {
-		await page.goto('/room/e2e-solo-presence');
+		await page.goto('/room/e2esolopresence');
 
 		await expect(page.getByText('나만 접속 중')).toBeVisible({ timeout: 10000 });
 	});
 
 	test('should allow typing in the editor', async ({ page }) => {
-		await page.goto('/room/e2e-test-typing');
+		await page.goto('/room/e2etesttyping');
 
 		const editor = page.locator('.tiptap');
 		await editor.waitFor({ timeout: 10000 });
@@ -86,7 +86,7 @@ test.describe('Room page', () => {
 	});
 
 	test('should apply Markdown input shortcuts', async ({ page }) => {
-		await page.goto('/room/e2e-test-markdown-shortcuts');
+		await page.goto('/room/e2emarkdown');
 
 		const editor = page.locator('.tiptap');
 		await editor.waitFor({ timeout: 10000 });
@@ -101,6 +101,13 @@ test.describe('Room page', () => {
 		await expect(editor.locator('ul li').filter({ hasText: 'Item' })).toBeVisible();
 	});
 
+	test('should reject invalid room IDs before editor initialization', async ({ page }) => {
+		await page.goto('/room/e2e-invalid');
+
+		await expect(page.getByText('올바르지 않은 방 주소입니다.')).toBeVisible();
+		await expect(page.locator('.tiptap')).not.toBeVisible();
+	});
+
 	test('should show share link feedback', async ({ page }) => {
 		await page.addInitScript(() => {
 			Object.defineProperty(navigator, 'clipboard', {
@@ -108,7 +115,7 @@ test.describe('Room page', () => {
 				configurable: true
 			});
 		});
-		await page.goto('/room/e2e-test-share');
+		await page.goto('/room/e2etestshare');
 		await page.locator('.tiptap').waitFor({ timeout: 10000 });
 
 		await page.getByRole('button', { name: '링크 복사' }).click();
@@ -117,11 +124,12 @@ test.describe('Room page', () => {
 	});
 
 	test('should prevent edits in read-only mode', async ({ page }) => {
-		await page.goto('/room/e2e-readonly?readonly=1');
+		await page.goto('/room/e2ereadonly?readonly=1');
 
 		const editor = page.locator('.tiptap');
 		await editor.waitFor({ timeout: 10000 });
 		await expect(page.getByText('읽기 전용 모드입니다')).toBeVisible();
+		await expect(page.getByTitle('새 탭 추가')).not.toBeVisible();
 
 		await editor.click();
 		await page.keyboard.type('Should not appear');
@@ -142,7 +150,7 @@ test.describe('Room page', () => {
 			});
 		});
 
-		await page.goto(`/room/e2e-readonly-capability-${Date.now()}?transport=encrypted`);
+		await page.goto(`/room/e2ero${Date.now().toString(36)}?transport=encrypted`);
 		await page.locator('.tiptap').waitFor({ timeout: 10000 });
 
 		await page.getByRole('button', { name: '읽기 전용 링크' }).click();
@@ -159,7 +167,7 @@ test.describe('Room page', () => {
 	});
 
 	test('should export current document as text', async ({ page }) => {
-		await page.goto('/room/e2e-export');
+		await page.goto('/room/e2eexport');
 
 		const editor = page.locator('.tiptap');
 		await editor.waitFor({ timeout: 10000 });
@@ -179,7 +187,7 @@ test.describe('Room page', () => {
 			'Only applies when Liveblocks key is absent'
 		);
 
-		await page.goto('/room/e2e-degraded-mode');
+		await page.goto('/room/e2edegraded');
 
 		await expect(page.locator('.tiptap')).toBeVisible({ timeout: 10000 });
 		await expect(page.getByText('Liveblocks 공개 키가 없어')).toBeVisible();
@@ -201,7 +209,7 @@ test.describe('Real-time collaboration (same-browser fallback)', () => {
 			};
 		});
 
-		const roomPath = `/room/e2e-sync-test-${Date.now()}`;
+		const roomPath = `/room/e2esync${Date.now().toString(36)}`;
 
 		const page1 = await context.newPage();
 		const page2 = await context.newPage();
@@ -237,7 +245,7 @@ test.describe('Real-time collaboration (same-browser fallback)', () => {
 			'Liveblocks public key is required for presence tests'
 		);
 
-		const roomPath = '/room/e2e-presence-test';
+		const roomPath = '/room/e2epresence';
 
 		const page1 = await context.newPage();
 		await page1.goto(roomPath);
@@ -276,7 +284,7 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 	});
 
 	test('two separate browsers should sync via Liveblocks WebSocket', async () => {
-		const roomPath = '/room/e2e-liveblocks-sync';
+		const roomPath = '/room/e2eliveblocks';
 
 		const page1 = await context1.newPage();
 		const page2 = await context2.newPage();
@@ -301,7 +309,7 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 	});
 
 	test('two separate browsers should sync via encrypted transport prototype', async () => {
-		const roomPath = `/room/e2e-encrypted-transport-${Date.now()}?transport=encrypted`;
+		const roomPath = `/room/e2eenc${Date.now().toString(36)}?transport=encrypted`;
 
 		const page1 = await context1.newPage();
 		await page1.goto(roomPath);
@@ -322,7 +330,7 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 	});
 
 	test('late joiner should restore encrypted transport snapshot', async () => {
-		const roomPath = `/room/e2e-encrypted-snapshot-${Date.now()}?transport=encrypted`;
+		const roomPath = `/room/e2esnap${Date.now().toString(36)}?transport=encrypted`;
 
 		const page1 = await context1.newPage();
 		await page1.addInitScript(() => {
@@ -366,7 +374,7 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 	});
 
 	test('presence should work across separate browsers', async () => {
-		const roomPath = '/room/e2e-liveblocks-presence';
+		const roomPath = '/room/e2elivepresence';
 
 		const page1 = await context1.newPage();
 		await page1.goto(roomPath);
@@ -387,7 +395,7 @@ test.describe('Liveblocks sync (cross-browser, WebSocket)', () => {
 
 test.describe('Local reload recovery', () => {
 	test('should restore room content after reload', async ({ page }) => {
-		const roomId = `e2e-reload-${Date.now()}`;
+		const roomId = `e2ereload${Date.now().toString(36)}`;
 		const roomPath = `/room/${roomId}`;
 
 		await page.goto(roomPath);

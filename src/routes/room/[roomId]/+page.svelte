@@ -9,6 +9,7 @@
 	import TabBar from '$lib/components/TabBar.svelte';
 	import Presence from '$lib/components/Presence.svelte';
 	import { getNickname, setNickname, getUserColor } from '$lib/utils/nickname';
+	import { isValidRoomCode } from '$lib/utils/roomCode';
 	import {
 		base64ToUpdate,
 		decryptEnvelope,
@@ -44,6 +45,9 @@
 		  });
 
 	const ENCRYPTED_SNAPSHOT_KEY = 'syncingshEncryptedSnapshot';
+	const DEFAULT_TAB_ID = 'default';
+	const MAX_TAB_ID_LENGTH = 40;
+	const MAX_TAB_NAME_LENGTH = 80;
 
 	type SignedEncryptedPayload = JsonObject & {
 		envelope: JsonObject;
@@ -71,6 +75,7 @@
 	}
 
 	const roomId = $derived($page.params.roomId);
+	const isValidRoom = $derived(typeof roomId === 'string' && isValidRoomCode(roomId));
 	const isReadonly = $derived($page.url.searchParams.get('readonly') === '1');
 	const usesEncryptedTransport = $derived($page.url.searchParams.get('transport') === 'encrypted');
 
@@ -106,15 +111,34 @@
 		return Math.random().toString(36).substring(2, 10);
 	}
 
+	function isValidTabId(value: unknown): value is string {
+		return (
+			typeof value === 'string' && /^[a-z0-9-]+$/.test(value) && value.length <= MAX_TAB_ID_LENGTH
+		);
+	}
+
+	function normalizeTabMeta(value: unknown): TabMeta | null {
+		if (!value || typeof value !== 'object') return null;
+		const tab = value as Partial<TabMeta>;
+		if (!isValidTabId(tab.id)) return null;
+		if (typeof tab.name !== 'string') return null;
+		if (typeof tab.createdAt !== 'number' || !Number.isFinite(tab.createdAt)) return null;
+
+		const name = tab.name.trim().slice(0, MAX_TAB_NAME_LENGTH);
+		if (!name) return null;
+
+		return { id: tab.id, name, createdAt: tab.createdAt };
+	}
+
 	function syncTabsFromYjs() {
 		if (!yTabs) return;
 		const seen: string[] = [];
 		const arr: TabMeta[] = [];
 		for (let i = 0; i < yTabs.length; i++) {
-			const t = yTabs.get(i);
-			if (!seen.includes(t.id)) {
-				seen.push(t.id);
-				arr.push(t);
+			const tab = normalizeTabMeta(yTabs.get(i));
+			if (tab && !seen.includes(tab.id)) {
+				seen.push(tab.id);
+				arr.push(tab);
 			}
 		}
 		tabs = arr;
@@ -125,7 +149,7 @@
 	}
 
 	function addTab() {
-		if (!ydoc || !yTabs) return;
+		if (isReadonly || !ydoc || !yTabs) return;
 		const id = generateTabId();
 		const newTab: TabMeta = {
 			id,
@@ -137,7 +161,7 @@
 	}
 
 	function closeTab(tabId: string) {
-		if (!ydoc || !yTabs) return;
+		if (isReadonly || !ydoc || !yTabs) return;
 		if (tabs.length <= 1) return;
 
 		const fragment = ydoc.getXmlFragment(`tab-${tabId}`);
@@ -164,13 +188,14 @@
 	}
 
 	function renameTab(tabId: string, newName: string) {
-		if (!yTabs) return;
+		if (isReadonly || !yTabs) return;
 		const index = tabs.findIndex((t) => t.id === tabId);
 		if (index === -1) return;
 
-		const existing = yTabs.get(index);
+		const existing = normalizeTabMeta(yTabs.get(index));
+		if (!existing) return;
 		yTabs.delete(index, 1);
-		yTabs.insert(index, [{ ...existing, name: newName }]);
+		yTabs.insert(index, [{ ...existing, name: newName.trim().slice(0, MAX_TAB_NAME_LENGTH) }]);
 	}
 
 	function switchTab(tabId: string) {
@@ -521,6 +546,11 @@
 
 	onMount(() => {
 		if (!roomId) return;
+		if (!isValidRoom) {
+			connectionStatus = 'error';
+			errorMessage = '올바르지 않은 방 주소입니다.';
+			return;
+		}
 
 		let disposed = false;
 		let cleanupLocalFallback = () => {};
@@ -551,11 +581,10 @@
 
 			const initTabs = () => {
 				if (!yTabs) return;
-				const DEFAULT_TAB_ID = 'default';
 				const hasDefault = Array.from({ length: yTabs.length }, (_, i) => yTabs!.get(i)).some(
-					(t) => t.id === DEFAULT_TAB_ID
+					(t) => normalizeTabMeta(t)?.id === DEFAULT_TAB_ID
 				);
-				if (!hasDefault) {
+				if (!hasDefault && !isReadonly) {
 					yTabs.push([{ id: DEFAULT_TAB_ID, name: '문서 1', createdAt: Date.now() }]);
 				}
 				activeTabId = DEFAULT_TAB_ID;
@@ -741,7 +770,9 @@
 	{#if errorMessage}
 		<div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
 			<p>{errorMessage}</p>
-			<p class="mt-1 text-xs">같은 브라우저 탭끼리는 계속 동기화되고, 새로고침해도 복구됩니다.</p>
+			{#if isValidRoom}
+				<p class="mt-1 text-xs">같은 브라우저 탭끼리는 계속 동기화되고, 새로고침해도 복구됩니다.</p>
+			{/if}
 		</div>
 	{/if}
 
@@ -756,6 +787,7 @@
 			<TabBar
 				{tabs}
 				{activeTabId}
+				readonly={isReadonly}
 				onswitch={switchTab}
 				onadd={addTab}
 				onclose={closeTab}
@@ -772,11 +804,13 @@
 		<div class="flex h-64 items-center justify-center text-red-400">
 			연결이 끊어졌습니다. 새로고침 해보세요.
 		</div>
-	{:else if connectionStatus === 'error'}
+	{:else if connectionStatus === 'error' && isValidRoom}
 		<div class="flex h-64 items-center justify-center text-amber-600">
 			로컬 모드로 실행 중입니다. 이 브라우저에서만 편집 내용이 저장되며, 서버에는 아무 데이터도 남지
 			않습니다.
 		</div>
+	{:else if connectionStatus === 'error'}
+		<div class="flex h-64 items-center justify-center text-amber-600">방 주소를 확인해주세요.</div>
 	{:else}
 		<div class="flex h-64 items-center justify-center text-gray-400">문서를 불러오는 중...</div>
 	{/if}

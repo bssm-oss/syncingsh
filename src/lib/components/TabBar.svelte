@@ -8,13 +8,14 @@
 	interface Props {
 		tabs: TabMeta[];
 		activeTabId: string;
+		readonly?: boolean;
 		onswitch: (tabId: string) => void;
 		onadd: () => void;
 		onclose: (tabId: string) => void;
 		onrename: (tabId: string, newName: string) => void;
 	}
 
-	let { tabs, activeTabId, onswitch, onadd, onclose, onrename }: Props = $props();
+	let { tabs, activeTabId, readonly = false, onswitch, onadd, onclose, onrename }: Props = $props();
 
 	let editingTabId = $state<string | null>(null);
 	let editingName = $state('');
@@ -24,12 +25,13 @@
 	}
 
 	function startRename(tab: TabMeta) {
+		if (readonly) return;
 		editingTabId = tab.id;
 		editingName = tab.name;
 	}
 
 	function commitRename() {
-		if (editingTabId && editingName.trim()) {
+		if (!readonly && editingTabId && editingName.trim()) {
 			onrename(editingTabId, editingName.trim());
 		}
 		editingTabId = null;
@@ -38,6 +40,7 @@
 
 	function handleClose(e: Event, tabId: string) {
 		e.stopPropagation();
+		if (readonly) return;
 		onclose(tabId);
 	}
 </script>
@@ -78,7 +81,7 @@
 				{:else}
 					<span class="truncate">{tab.name}</span>
 				{/if}
-				{#if tabs.length > 1}
+				{#if !readonly && tabs.length > 1}
 					<span
 						role="button"
 						tabindex="0"
@@ -99,11 +102,13 @@
 		{/each}
 	</div>
 
-	<button
-		onclick={onadd}
-		class="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
-		title="새 탭 추가"
-	>
-		+
-	</button>
+	{#if !readonly}
+		<button
+			onclick={onadd}
+			class="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600"
+			title="새 탭 추가"
+		>
+			+
+		</button>
+	{/if}
 </div>
