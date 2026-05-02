@@ -2,9 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import * as Y from 'yjs';
-	import { createClient } from '@liveblocks/client';
-	import type { JsonObject } from '@liveblocks/client';
-	import { getYjsProviderForRoom } from '@liveblocks/yjs';
+	import { WebrtcProvider } from 'y-webrtc';
 	import Editor from '$lib/components/Editor.svelte';
 	import TabBar from '$lib/components/TabBar.svelte';
 	import Presence from '$lib/components/Presence.svelte';
@@ -15,16 +13,12 @@
 		decryptEnvelope,
 		encryptBytes,
 		ensureRoomKey,
-		ensureWriteCapability,
 		importRoomKey,
 		isEncryptedEnvelope,
 		parseEncryptedEnvelope,
 		removeWriteCapability,
-		signText,
-		serializeEnvelope,
-		verifyTextSignature
+		serializeEnvelope
 	} from '$lib/utils/localEncryption';
-	import type { EncryptedEnvelope, WriteCapability } from '$lib/utils/localEncryption';
 	import type { ConnectionStatus } from '$lib/types/yjs';
 
 	interface TabMeta {
@@ -33,37 +27,10 @@
 		createdAt: number;
 	}
 
-	type EncryptedTransportEvent =
-		| (JsonObject & {
-				type: 'syncingsh-yjs-update';
-				origin: string;
-				signedUpdate: SignedEncryptedPayload;
-		  })
-		| (JsonObject & {
-				type: 'syncingsh-sync-request';
-				origin: string;
-		  });
-
-	const ENCRYPTED_SNAPSHOT_KEY = 'syncingshEncryptedSnapshot';
+	const SIGNALING_URL = 'wss://syncingsh-signaling.onrender.com/';
 	const DEFAULT_TAB_ID = 'default';
 	const MAX_TAB_ID_LENGTH = 40;
 	const MAX_TAB_NAME_LENGTH = 80;
-
-	type SignedEncryptedPayload = JsonObject & {
-		envelope: JsonObject;
-		signature: string;
-	};
-
-	interface EncryptedStorageRoot {
-		get(key: string): unknown;
-		set(key: string, value: string): void;
-	}
-
-	interface EncryptedRoom {
-		broadcastEvent(event: EncryptedTransportEvent): void;
-		getStorage(): Promise<{ root: EncryptedStorageRoot }>;
-		subscribe(type: 'event', callback: (message: { event: unknown }) => void): () => void;
-	}
 
 	interface AwarenessLike {
 		setLocalStateField(field: string, value: unknown): void;
@@ -77,7 +44,6 @@
 	const roomId = $derived($page.params.roomId);
 	const isValidRoom = $derived(typeof roomId === 'string' && isValidRoomCode(roomId));
 	const isReadonly = $derived($page.url.searchParams.get('readonly') === '1');
-	const usesEncryptedTransport = $derived($page.url.searchParams.get('transport') === 'encrypted');
 
 	let ydoc = $state<Y.Doc | null>(null);
 	let awareness = $state<AwarenessLike | null>(null);
@@ -281,84 +247,6 @@
 		return crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
 	}
 
-	function isEncryptedTransportEvent(value: unknown): value is EncryptedTransportEvent {
-		return (
-			!!value &&
-			typeof value === 'object' &&
-			((value as EncryptedTransportEvent).type === 'syncingsh-yjs-update' ||
-				(value as EncryptedTransportEvent).type === 'syncingsh-sync-request') &&
-			typeof (value as EncryptedTransportEvent).origin === 'string'
-		);
-	}
-
-	function isSignedEncryptedPayload(value: unknown): value is SignedEncryptedPayload {
-		return (
-			!!value &&
-			typeof value === 'object' &&
-			'envelope' in value &&
-			typeof (value as SignedEncryptedPayload).signature === 'string'
-		);
-	}
-
-	async function signEnvelope(envelope: EncryptedEnvelope, capability: WriteCapability) {
-		if (!capability.privateKey) return null;
-		const serialized = JSON.stringify(envelope);
-		return {
-			envelope: envelope as unknown as JsonObject,
-			signature: await signText(capability.privateKey, serialized)
-		};
-	}
-
-	async function verifySignedEnvelope(payload: unknown, capability: WriteCapability) {
-		if (!capability.publicKey || !isSignedEncryptedPayload(payload)) return null;
-		const verified = await verifyTextSignature(
-			capability.publicKey,
-			JSON.stringify(payload.envelope),
-			payload.signature
-		);
-		return verified && isEncryptedEnvelope(payload.envelope) ? payload.envelope : null;
-	}
-
-	async function restoreEncryptedRoomSnapshot(
-		doc: Y.Doc,
-		encryptionKey: CryptoKey,
-		writeCapability: WriteCapability,
-		room: EncryptedRoom
-	) {
-		try {
-			const { root } = await room.getStorage();
-			const stored = root.get(ENCRYPTED_SNAPSHOT_KEY);
-			if (typeof stored !== 'string') return;
-
-			const payload = JSON.parse(stored) as unknown;
-			const envelope = await verifySignedEnvelope(payload, writeCapability);
-			if (!envelope) return;
-
-			Y.applyUpdate(doc, await decryptEnvelope(encryptionKey, envelope), 'encrypted-snapshot');
-		} catch {
-			// Snapshot recovery is best-effort; live encrypted relay may still catch up.
-		}
-	}
-
-	async function persistEncryptedRoomSnapshot(
-		doc: Y.Doc,
-		encryptionKey: CryptoKey,
-		writeCapability: WriteCapability,
-		room: EncryptedRoom
-	) {
-		try {
-			if (!writeCapability.privateKey) return;
-			const { root } = await room.getStorage();
-			const envelope = await encryptBytes(encryptionKey, Y.encodeStateAsUpdate(doc));
-			const signedPayload = await signEnvelope(envelope, writeCapability);
-			if (!signedPayload) return;
-			root.set(ENCRYPTED_SNAPSHOT_KEY, JSON.stringify(signedPayload));
-			window.dispatchEvent(new CustomEvent('syncingsh:encrypted-snapshot-persisted'));
-		} catch {
-			// Keep editing even when durable encrypted snapshot persistence fails.
-		}
-	}
-
 	function connectLocalFallback(doc: Y.Doc, encryptionKey: CryptoKey, canWrite = true) {
 		let pendingPersist = Promise.resolve();
 		const schedulePersist = () => {
@@ -450,87 +338,6 @@
 		};
 	}
 
-	function connectEncryptedRoomTransport(
-		doc: Y.Doc,
-		encryptionKey: CryptoKey,
-		writeCapability: WriteCapability,
-		room: EncryptedRoom
-	) {
-		const origin = fallbackOrigin();
-		let pendingSnapshot: Promise<void> | null = null;
-		let snapshotRequested = false;
-		const scheduleSnapshotPersist = () => {
-			if (pendingSnapshot) {
-				snapshotRequested = true;
-				return;
-			}
-
-			pendingSnapshot = (async () => {
-				do {
-					snapshotRequested = false;
-					await persistEncryptedRoomSnapshot(doc, encryptionKey, writeCapability, room);
-				} while (snapshotRequested);
-			})().finally(() => {
-				pendingSnapshot = null;
-			});
-		};
-
-		const broadcastUpdate = async (update: Uint8Array) => {
-			if (!writeCapability.privateKey) return;
-			const envelope = await encryptBytes(encryptionKey, update);
-			const signedUpdate = await signEnvelope(envelope, writeCapability);
-			if (!signedUpdate) return;
-			room.broadcastEvent({
-				type: 'syncingsh-yjs-update',
-				origin,
-				signedUpdate
-			});
-		};
-
-		const onUpdate = (update: Uint8Array, updateOrigin: unknown) => {
-			if (updateOrigin === 'encrypted-transport') return;
-			scheduleSnapshotPersist();
-			void broadcastUpdate(update).catch(() => {
-				// The encrypted relay is best-effort; local recovery remains available.
-			});
-		};
-
-		const unsubscribeEvents = room.subscribe('event', ({ event }: { event: unknown }) => {
-			if (!isEncryptedTransportEvent(event) || event.origin === origin) return;
-
-			if (event.type === 'syncingsh-sync-request') {
-				void broadcastUpdate(Y.encodeStateAsUpdate(doc)).catch(() => {
-					// Ignore failed sync responses; peers can keep editing locally.
-				});
-				return;
-			}
-
-			void (async () => {
-				try {
-					const envelope = await verifySignedEnvelope(event.signedUpdate, writeCapability);
-					if (!envelope) return;
-					Y.applyUpdate(doc, await decryptEnvelope(encryptionKey, envelope), 'encrypted-transport');
-					scheduleSnapshotPersist();
-				} catch {
-					// Ignore updates encrypted for another room key or malformed payloads.
-				}
-			})();
-		});
-
-		doc.on('update', onUpdate);
-		scheduleSnapshotPersist();
-		try {
-			room.broadcastEvent({ type: 'syncingsh-sync-request', origin });
-		} catch {
-			// Late-join catch-up is best-effort in this prototype.
-		}
-
-		return () => {
-			doc.off('update', onUpdate);
-			unsubscribeEvents();
-		};
-	}
-
 	function updateNickname() {
 		const trimmed = nickname.trim();
 		if (!trimmed) return;
@@ -555,7 +362,6 @@
 		let disposed = false;
 		let cleanupLocalFallback = () => {};
 		let cleanupProvider = () => {};
-		let cleanupEncryptedTransport = () => {};
 		let activeDoc: Y.Doc | null = null;
 
 		void (async () => {
@@ -563,9 +369,6 @@
 			const userColor = getUserColor();
 			const roomUrl = new URL(window.location.href);
 			const encryptionKey = await importRoomKey(ensureRoomKey(roomUrl));
-			const writeCapability = usesEncryptedTransport
-				? await ensureWriteCapability(roomUrl, !isReadonly)
-				: null;
 			const doc = new Y.Doc();
 			await restoreLocalDoc(doc, encryptionKey);
 			if (disposed) {
@@ -573,12 +376,21 @@
 				return;
 			}
 
-			cleanupLocalFallback = connectLocalFallback(doc, encryptionKey, !isReadonly);
+			const provider = new WebrtcProvider(roomId, doc, { signaling: [SIGNALING_URL] });
 			activeDoc = doc;
+			cleanupLocalFallback = connectLocalFallback(doc, encryptionKey, !isReadonly);
+
+			provider.awareness.setLocalStateField('user', {
+				name: nickname,
+				color: userColor
+			});
 
 			ydoc = doc;
+			awareness = provider.awareness;
+			connectionStatus = 'connecting';
 			yTabs = doc.getArray<TabMeta>('tabs');
 
+			const syncTabsObserver = () => syncTabsFromYjs();
 			const initTabs = () => {
 				if (!yTabs) return;
 				const hasDefault = Array.from({ length: yTabs.length }, (_, i) => yTabs!.get(i)).some(
@@ -589,102 +401,22 @@
 				}
 				activeTabId = DEFAULT_TAB_ID;
 				syncTabsFromYjs();
-				yTabs.observe(() => syncTabsFromYjs());
+				yTabs.observe(syncTabsObserver);
 			};
 
+			const onStatus = ({ connected }: { connected: boolean }) => {
+				connectionStatus = connected ? 'connected' : 'disconnected';
+			};
+			provider.on('status', onStatus);
+			provider.on('synced', ({ synced }: { synced: boolean }) => {
+				if (synced) connectionStatus = 'connected';
+			});
 			initTabs();
 
-			const publicKey = import.meta.env.VITE_LIVEBLOCKS_PUBLIC_KEY;
-			if (!publicKey) {
-				connectionStatus = 'error';
-				errorMessage = 'Liveblocks 공개 키가 없어 이 브라우저의 로컬 복구 모드로 실행 중입니다.';
-				return;
-			}
-
-			const client = createClient({
-				publicApiKey: publicKey
-			});
-
-			const { room, leave } = client.enterRoom(roomId);
-
-			if (usesEncryptedTransport) {
-				if (!writeCapability) return;
-				await restoreEncryptedRoomSnapshot(doc, encryptionKey, writeCapability, room);
-				if (disposed) {
-					leave();
-					doc.destroy();
-					return;
-				}
-				syncTabsFromYjs();
-
-				const mapStatus = (status: string) => {
-					if (status === 'connected') connectionStatus = 'connected';
-					else if (status === 'connecting' || status === 'reconnecting')
-						connectionStatus = 'connecting';
-					else if (status === 'disconnected') connectionStatus = 'disconnected';
-				};
-
-				mapStatus(room.getStatus());
-				const unsubscribeStatus = room.subscribe('status', mapStatus);
-				cleanupEncryptedTransport = connectEncryptedRoomTransport(
-					doc,
-					encryptionKey,
-					writeCapability,
-					room
-				);
-				cleanupProvider = () => {
-					unsubscribeStatus();
-					leave();
-				};
-				return;
-			}
-
-			const provider = getYjsProviderForRoom(room);
-			const liveblocksDoc = provider.getYDoc();
-			await restoreLocalDoc(liveblocksDoc, encryptionKey);
-			if (disposed) {
-				leave();
-				liveblocksDoc.destroy();
-				return;
-			}
-			cleanupLocalFallback();
-			cleanupLocalFallback = connectLocalFallback(liveblocksDoc, encryptionKey, !isReadonly);
-			activeDoc = liveblocksDoc;
-
-			const mapStatus = (status: string) => {
-				if (status === 'connected') connectionStatus = 'connected';
-				else if (status === 'connecting' || status === 'reconnecting')
-					connectionStatus = 'connecting';
-				else if (status === 'disconnected') connectionStatus = 'disconnected';
-			};
-
-			mapStatus(room.getStatus());
-			const unsubscribeStatus = room.subscribe('status', mapStatus);
-
-			provider.awareness.setLocalStateField('user', {
-				name: nickname,
-				color: userColor
-			});
-
-			ydoc = liveblocksDoc;
-			awareness = provider.awareness;
-			connectionStatus = 'connecting';
-
-			yTabs = liveblocksDoc.getArray<TabMeta>('tabs');
-
-			if (provider.synced) {
-				initTabs();
-			} else {
-				const onSynced = () => {
-					provider.off('sync', onSynced);
-					initTabs();
-				};
-				provider.on('sync', onSynced);
-			}
-
 			cleanupProvider = () => {
-				unsubscribeStatus();
-				leave();
+				if (yTabs) yTabs.unobserve(syncTabsObserver);
+				provider.off('status', onStatus);
+				provider.destroy();
 			};
 		})();
 
@@ -692,7 +424,6 @@
 			disposed = true;
 			cleanupProvider();
 			cleanupLocalFallback();
-			cleanupEncryptedTransport();
 			activeDoc?.destroy();
 		};
 	});

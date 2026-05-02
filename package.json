@@ -59,8 +59,6 @@
 		"ws": "^8.19.0"
 	},
 	"dependencies": {
-		"@liveblocks/client": "^3.18.1",
-		"@liveblocks/yjs": "^3.18.1",
 		"@tiptap/core": "^3.20.2",
 		"@tiptap/extension-code-block-lowlight": "^3.20.4",
 		"@tiptap/extension-collaboration": "^3.20.2",
@@ -69,6 +67,7 @@
 		"@tiptap/starter-kit": "^3.20.2",
 		"highlight.js": "^11.11.0",
 		"lowlight": "^3.3.0",
+		"y-webrtc": "^10.3.0",
 		"yjs": "^13.6.29"
 	}
 }
